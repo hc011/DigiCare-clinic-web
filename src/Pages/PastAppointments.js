@@ -615,7 +615,7 @@ export default function PastAppointments() {
       }}
     >
       <DialogTitle sx={{ position: "relative", pr: 6, p: 0, mb: 2 }}>
-        <Typography variant="h5">Edit Appointment</Typography>
+        <Typography component="div" variant="h5">Edit Appointment</Typography>
         <IconButton
           aria-label="close"
           onClick={handleEditModalClose}

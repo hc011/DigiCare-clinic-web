@@ -60,14 +60,23 @@ const PatientItem = ({
   const [confirmAction, setConfirmAction] = useState(null);
   const [loadingType, setLoadingType] = useState(null);
 
+  // Remove debugger statement and add more useful debugging
+  
+
   // Determine if this is the current patient based on position
-  const isCurrent = position === currentPosition;
+  // Force evaluate as numbers to ensure proper comparison
+  let isCurrent = parseInt(position) === parseInt(currentPosition);
   const isLate = late;
   const isDone = status === "done_checkup" || status === "done";
   const isCancelled = status === "cancelled";
   const isPending = status === "pending";
   console.log("late", late);
   const user = JSON.parse(localStorage.getItem('user'));
+
+  useEffect(() => {
+    isCurrent = parseInt(position) === parseInt(currentPosition);
+    console.log(`PatientItem ${position} - Current position: ${currentPosition}, isCurrent: ${position === currentPosition}`);
+  }, [position, currentPosition]);
 
   // Log the data structure for debugging
   useEffect(() => {

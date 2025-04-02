@@ -23,14 +23,11 @@ import PastAppointmentsPage from "./Pages/PastAppointments";
 import { Navigate } from "react-router-dom";
 import AppointmentForm from "./components/AppointmentForm";
 import AppointmentDetails from "./Pages/AppointmentDetails";
+import webSocketService from "./services/websocketService";
 
 import {
   fetchPatients,
   fetchCurrentPosition,
-  markPatientAsDone,
-  markPatientAsLate,
-  shufflePatientPosition,
-  addAppointment,
 } from "./services/api";
 
 import { ThemeProvider } from '@mui/material/styles';
@@ -64,8 +61,159 @@ const App = () => {
   // Use authUser for conditional rendering
   const currentUser = authUser || user;
 
-  // Declare eventSource at component level
-  let eventSource;
+  // Setup WebSocket connection at app level
+  useEffect(() => {
+    if (!cabinId || !selectedSlot || !currentUser) return;
+
+    console.log("Setting up WebSocket connection at App level");
+    webSocketService.connect(cabinId, selectedSlot);
+
+    // Handle visibility changes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('Tab is now visible, checking WebSocket connection state');
+        if (!webSocketService.ws || webSocketService.ws.readyState === WebSocket.CLOSED) {
+          console.log('WebSocket connection needs to be re-established');
+          webSocketService.reconnectAttempt = 0;
+          webSocketService.connect(cabinId, selectedSlot);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      webSocketService.disconnect();
+    };
+  }, [cabinId, selectedSlot, currentUser]);
+
+  // Setup WebSocket subscriber for queue updates
+  useEffect(() => {
+    if (!cabinId || !selectedSlot || !currentUser) return;
+
+    console.log("Setting up WebSocket subscription for queue updates in App");
+    
+    // Subscribe to queue updates
+    const unsubscribe = webSocketService.subscribe('queue', (response) => {
+      console.log("Received queue update via WebSocket in App:", response);
+      
+      try {
+        // Check for the right message format
+        let queueData = null;
+        let cabinslotData = null;
+        if (response.data && response.data.type === "queue_update" && response.data.data) {
+          // Check for queue update
+          if (response.data.data.queue) {
+            queueData = response.data.data.queue;
+          }
+          
+          // Check for cabinslot update
+          if (response.data.data.cabinslot) {
+            cabinslotData = response.data.data.cabinslot;
+          }
+        }
+        
+        // Handle queue data
+        if (queueData) {
+          console.log("Processing queue update:", queueData);
+          
+          
+          // Update patient state
+          setPatients(prevPatients => {
+            // Find if the updated patient already exists in our list
+            const existingPatientIndex = prevPatients.findIndex(
+              p => p.appointment?.appointment_id === queueData.appointment?.appointment_id
+            );
+            
+            // If appointment data exists in the queue update
+            if (queueData.appointment) {
+              const updatedPatient = {
+                appointment: queueData.appointment,
+                position: queueData.position,
+                status: queueData.status,
+                paid: queueData.paid,
+                checkin: queueData.checkin,
+                late: queueData.late || false
+              };
+              
+              if (existingPatientIndex !== -1) {
+                // Update existing patient
+                const updatedPatients = [...prevPatients];
+                updatedPatients[existingPatientIndex] = {
+                  ...updatedPatients[existingPatientIndex],
+                  ...updatedPatient
+                };
+                return updatedPatients;
+              } else {
+                // Add new patient to the list
+                return [...prevPatients, updatedPatient];
+              }
+            }
+            
+            return prevPatients;
+          });
+        }
+        
+        // Handle cabinslot data
+        if (cabinslotData) {
+          console.log("Processing cabinslot update:", cabinslotData);
+          // Update current position if current_number is provided
+          if (cabinslotData.current_number !== undefined) {
+            console.log("Updating current position to:", cabinslotData.current_number);
+            setCurrentPosition(parseInt(cabinslotData.current_number));
+          }
+        }
+      } catch (error) {
+        console.error("Error processing WebSocket queue data in App:", error);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [cabinId, selectedSlot, currentUser]);
+
+  useEffect(() => {
+    if (currentPosition) {
+      console.log("Current position  ---- :", currentPosition);
+    }
+  }, [currentPosition]);
+
+  // Setup WebSocket subscriber for cabinslot updates
+  useEffect(() => {
+    if (!cabinId || !selectedSlot || !currentUser) return;
+
+    console.log("Setting up WebSocket subscription for cabinslot updates in App");
+    
+    // Subscribe to cabinslot updates
+    const cabinslotUnsubscribe = webSocketService.subscribe('cabinslot', (response) => {
+      console.log("Received cabinslot update via WebSocket in App:", response);
+      try {
+        let cabinslotData = null;
+
+        // Handle different possible formats
+        if (response.data && response.data.type === "cabinslot_update" && response.data.data) {
+          cabinslotData = response.data.data;
+        } else if (response.data && response.data.type === "queue_update" && response.data.data && response.data.data.cabinslot) {
+          cabinslotData = response.data.data.cabinslot;
+        } else if (response.type === "cabinslot" && response.data) {
+          cabinslotData = response.data;
+        }
+        
+        if (cabinslotData && cabinslotData.current_number !== undefined) {
+          console.log("Updating current position from cabinslot to:", cabinslotData.current_number);
+          setCurrentPosition(parseInt(cabinslotData.current_number));
+        }
+      } catch (error) {
+        console.error("Error processing WebSocket cabinslot data in App:", error);
+      }
+    });
+
+    return () => {
+      cabinslotUnsubscribe();
+    };
+  }, [cabinId, selectedSlot, currentUser]);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -96,177 +244,14 @@ const App = () => {
     }
   }, [patients, currentPosition]);
 
-
-  // Add SSE for real-time queue updates
-  useEffect(() => {
-    if (!cabinId || loading) return;
-
-    const date = new Date(selectedSlot);
-    const formattedDate = date
-      .toISOString()
-      .replace(".000", "")
-      .replace("T", " ")
-      .replace("Z", "+00:00");
-    const encodedDate = encodeURIComponent(formattedDate);
-    const sseUrl = `${API_BASE_URL}/doctorinfo/queue_updates/${cabinId}/${encodedDate}`;
-
-    let reconnectAttempt = 0;
-    let reconnectTimer = null;
-    let eventSource = null;
-    
-    const connectEventSource = () => {
-      // Close existing connection if any
-      if (eventSource) {
-        eventSource.close();
-      }
-      
-      eventSource = new EventSource(sseUrl, { withCredentials: true });
-
-      eventSource.onmessage = (event) => {
-        try {
-          const parsedData = JSON.parse(event.data);
-
-          // console.log("SSE Data:", parsedData);
-          if (parsedData.queue) {
-            // Update the patients array with the new patient data
-            setPatients((prevPatients) => {
-              const updatedPatient = {
-                position: parsedData.queue.position,
-                late: parsedData.queue.late || false,
-                status: parsedData.queue.status || "pending",
-                paid: parsedData.queue.paid || false,
-                checkin: parsedData.queue.checkin || false,
-                appointment: parsedData.queue.appointment
-              };
-
-              // Find if the patient already exists
-              const existingIndex = prevPatients.findIndex(
-                (p) => p.appointment.appointment_id === parsedData.queue.appointment.appointment_id
-              );
-
-              const newPatients = [...prevPatients];
-              if (existingIndex !== -1) {
-                newPatients[existingIndex] = updatedPatient;
-              } else {
-                newPatients.push(updatedPatient);
-              }
-              return newPatients.sort((a, b) => a.position - b.position);
-            });
-          } else if (parsedData.cabinslot) {
-            setCurrentPosition(parsedData.cabinslot.current_number);
-          }
-        } catch (error) {
-          console.error("Error processing SSE data:", error);
-        }
-      };
-
-      eventSource.onerror = (error) => {
-        console.error("SSE connection error:", error);
-        eventSource.close();
-        
-        // Calculate delay with exponential backoff, capped at 30 seconds
-        const delay = Math.min(1000 * (2 ** reconnectAttempt), 30000);
-        reconnectAttempt++;
-        
-        console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
-        reconnectTimer = setTimeout(() => {
-          console.log('Reconnecting to SSE...');
-          connectEventSource();
-        }, delay);
-      };
-
-      return eventSource;
-    };
-    
-    // Initial connection
-    eventSource = connectEventSource();
-
-    // Handle visibility changes
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('Tab is now visible, checking SSE connection state');
-        // Only reconnect if the connection is closed or in an error state
-        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
-          console.log('SSE connection needs to be re-established');
-          reconnectAttempt = 0; // Reset reconnection attempt counter
-          eventSource = connectEventSource();
-        } else {
-          console.log('SSE connection is already active, no need to reconnect');
-        }
-      }
-    };
-
-    // Listen for visibility change events
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Cleanup on unmount
-    return () => {
-      if (eventSource) {
-        eventSource.close();
-        console.log("SSE connection cleaned up");
-      }
-      
-      // Clear any pending reconnect timer on unmount
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [cabinId, selectedSlot, currentUser]);
-
-  const handleNextPatient = async (id) => {    
-      const result = await markPatientAsDone(id);
-      return result;
-  };
-
-  const handleLatePatient = async (id) => {
-    const result = await markPatientAsLate(id);
-    return result;
-  };
-
-  const shufflePosition = async (payload) => {
-    
-    const result = await shufflePatientPosition(payload);
-    return result;
-  };
-
-  // const addNewAppointment = async (pid, disease, appointmentType) => {
-    
-    
-  //   const result = await dummyAddAppointment({
-  //     patientId: pid,
-  //     patientName: patientProfile ? patientProfile.fullName : "Unknown Patient",
-  //     disease: disease,
-  //     appointment_type: appointmentType,
-  //     phone_number: patientProfile ? patientProfile.phone_number : "",
-  //     age: patientProfile ? patientProfile.age : "",
-  //     gender: patientProfile ? patientProfile.gender : "",
-  //     location: patientProfile ? patientProfile.address : "",
-  //     guardian: patientProfile ? patientProfile.emergencyContact : ""
-  //   });
-    
-  //   // Update local state with the latest patients from dummyPatients
-  //   if (result.success && result.appointment) {
-  //     // Get the latest patients from the dummyPatients array
-  //     setPatients([...dummyPatients]);
-  //     return result;
-  //   }
-    
-  //   return { success: false };
-  // };
-
   return (
     <AppointmentFormProvider>
       <NotificationProvider>
         <ThemeProvider theme={theme}>
           <Router>
-            <AppointmentForm />
             <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
               {currentUser !== null && (
-                <Header 
-                  patients={patients || []} 
-                  closeEventSource={() => {}} 
-                />
+                <Header />
               )}
               <Box
                 sx={{
@@ -321,16 +306,16 @@ const App = () => {
                       path="/appointments"
                       element={
                         <PrivateRoute>
-                          <AppointmentTable 
-                            currentCabinSlot={currentCabinSlot}
-                          />
+                          <AppointmentTable />
                         </PrivateRoute>
                       }
                     />
                     <Route
                       path="/past-appointments"
                       element={
-                        <PrivateRoute>{<PastAppointmentsPage />}</PrivateRoute>
+                        <PrivateRoute>
+                          <PastAppointmentsPage />
+                        </PrivateRoute>
                       }
                     />
                     <Route
@@ -391,12 +376,8 @@ const App = () => {
                         <PrivateRoute>
                           <Home
                             currentPosition={currentPosition}
-                            setCurrentPosition={setCurrentPosition}
                             patients={patients}
                             setPatients={(patients) => setPatients(patients)}
-                            handleNextPatient={handleNextPatient}
-                            handleLatePatient={(id, pos) => handleLatePatient(id, pos)}
-                            shufflePosition={(payload) => shufflePosition(payload)}
                             loading={loading}
                           />
                         </PrivateRoute>
@@ -433,7 +414,7 @@ const App = () => {
               <AppointmentForm />
               
               {/* PDF Viewer for reports/prescriptions */}
-              {pdfViewerState.isOpen && (
+              {pdfViewerState.open && (
                 <PDFViewer
                   url={pdfViewerState.pdfUrl}
                   onClose={closePdfViewer}

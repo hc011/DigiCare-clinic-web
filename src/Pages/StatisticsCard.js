@@ -17,12 +17,6 @@ export default function StatisticsCard({ patients, currentPatient, loading }) {
   });
 
   useEffect(() => {
-    const checkCurrentPatientLateStatus = () => {
-      if (currentPatient) {
-        return currentPatient.late ? 1 : 0;
-      }
-      return 0;
-    };
 
     const updatedStats = {
       totalPatientsToday: patients.length,

@@ -35,6 +35,7 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
   // Update local state when props change
   useEffect(() => {
     if (patientsData) {
+      console.log("MobileQueuePage received updated patients data:", patientsData);
       setPatients(patientsData);
       
       // Mark data as loaded regardless of whether there are patients or not
@@ -43,7 +44,9 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
     }
     
     if (currentPositionData !== undefined) {
-      setCurrentPosition(currentPositionData);
+      console.log("MobileQueuePage received updated current position:", currentPositionData);
+      // Ensure we're using a number for the current position
+      setCurrentPosition(parseInt(currentPositionData));
     }
     
     // Fix mobile patient items when data is updated

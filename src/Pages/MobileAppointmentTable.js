@@ -32,45 +32,20 @@ import {
   Skeleton,
 } from "@mui/material";
 import {
-  fetchAppointments,
   updateAppointmentDetails,
   removeAppointment,
   getPatientProfile,
+  fetchAppointments as fetchAppointmentsApi
 } from "../services/api";
 import "./MobileAppointmentTable.css";
 import SearchIcon from "@mui/icons-material/Search";
 import { CheckCircle, Cancel, Edit } from "@mui/icons-material";
 import CloseIcon from "@mui/icons-material/Close";
-import { getCabinInfo } from "../utils/dateUtils";
+import { getCabinInfoFromUser } from "../utils/dateUtils";
+import webSocketService from "../services/websocketService";
+import { useNotification } from "../context/NotificationContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
-
-// Function to generate display rows
-const generateDisplayRows = (actualRows) => {
-  if (actualRows.length === 0) return [];
-
-  const tokens = actualRows.map((row) => row.token);
-  const minToken = Math.min(...tokens);
-  const maxToken = Math.max(...tokens);
-
-  return Array.from({ length: maxToken - minToken + 1 }, (_, i) => {
-    const token = minToken + i;
-    const existing = actualRows.find((row) => row.token === token);
-    return (
-      existing || {
-        id: token,
-        token,
-        isPlaceholder: true,
-        patientName: "",
-        checkin: false,
-        paid: false,
-        status: "empty",
-        guardian: "",
-        appointment_id: "",
-      }
-    );
-  });
-};
 
 // Function to get status color
 const getStatusColor = (status) => {
@@ -87,70 +62,133 @@ const getStatusColor = (status) => {
   }
 };
 
-const MobileAppointmentTable = () => {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [appointments, setAppointments] = useState([]);
+export default function MobileAppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const [searchQuery, setSearchQuery] = useState("");
+  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
+  
+  // State for appointment data
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Notification context for showing messages
+  const { showErrorSnackbar, showSuccessSnackbar } = useNotification();
+  
+  // State for editing appointment
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
+  
+  // State for search and filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState("all");
+  
+  // State for cancellation confirmation
   const [cancelConfirmationOpen, setCancelConfirmationOpen] = useState(false);
   const [rowToCancel, setRowToCancel] = useState(null);
+  const [isCanceling, setIsCanceling] = useState(false);
+  
+  // State for patient search in edit modal
   const [editMobileSearchResults, setEditMobileSearchResults] = useState([]);
   const [isEditSearching, setIsEditSearching] = useState(false);
-  const [eventSource, setEventSource] = useState(null);
-
-  // Memoize cabin info to prevent unnecessary recalculations
-  const { cabinId, selectedSlot } = useMemo(() => getCabinInfo(user), [user]);
-
-  // Use generateDisplayRows to include empty slots
-  const displayRows = useMemo(() => {
-    // First get the filtered appointments based on search
-    let filtered = searchQuery ? 
-      appointments.filter((apt) => apt.patientName.toLowerCase().includes(searchQuery.toLowerCase())) :
-      appointments;
-    
-    // Then generate display rows to include empty slots
-    return generateDisplayRows(filtered).sort((a, b) => Number(a.token) - Number(b.token));
-  }, [appointments, searchQuery]);
-
-  // Keep the original filtered appointments logic for backward compatibility
-  const filteredAppointments = useMemo(() => {
-    if (!searchQuery) {
-      // Sort appointments by token number (converting to number for proper numeric sort)
-      return [...appointments].sort((a, b) => Number(a.token) - Number(b.token));
+  
+  // Memoized cabin info for appointments
+  const cabinInfo = useMemo(() => {
+    if (user && user.checkupcabindata && user.checkupcabindata.length > 0) {
+      return {
+        cabinNumber: user.checkupcabindata[0].cab_id,
+        doctorName: user.checkupcabindata[0].doctor_name || "Dr.",
+      };
     }
-    
-    const query = searchQuery.toLowerCase();
-    return appointments
-      .filter((apt) => apt.patientName.toLowerCase().includes(query))
-      .sort((a, b) => Number(a.token) - Number(b.token)); // Sort filtered results too
-  }, [appointments, searchQuery]);
+    return { cabinNumber: "", doctorName: "Dr." };
+  }, [user]);
 
-  const handleEditClick = (appointment) => {
-    // Format the appointment to match the expected structure in the edit form
-    const formattedAppointment = {
-      ...appointment,
-      firstName: appointment.patientName.split(" ")[0] || "",
-      lastName: appointment.patientName.split(" ").slice(1).join(" ") || "",
+  // Handler to edit a specific appointment row
+  const handleEditClick = (row) => {
+    // When setting the selected appointment, parse the patient name into first and last name
+    const fullName = row.patientName || '';
+    const nameParts = fullName.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+    
+    // Create a modified row with firstName and lastName properties
+    const formattedRow = {
+      ...row,
+      firstName: firstName,
+      lastName: lastName
     };
     
-    setSelectedAppointment(formattedAppointment);
+    setSelectedAppointment(formattedRow);
     setEditModalOpen(true);
-    
-    // Clear any previous search results
-    setEditMobileSearchResults([]);
   };
 
+  // Close edit modal and reset state
   const handleEditModalClose = () => {
     setEditModalOpen(false);
     setSelectedAppointment(null);
+    setUpdateError(null);
   };
 
+  // Handle edit form submission
+  const handleEditSubmit = async () => {
+    if (!selectedAppointment) return;
+    
+    setIsUpdating(true);
+    setUpdateError(null);
+    
+    try {
+      // Combine firstName and lastName back into a full name if they exist
+      const fullName = selectedAppointment.firstName && selectedAppointment.lastName 
+        ? `${selectedAppointment.firstName} ${selectedAppointment.lastName}`.trim()
+        : selectedAppointment.patientName || '';
+      
+      // Prepare data for API - match the format used in AppointmentTable
+      const updateData = {
+        appointment_id: selectedAppointment.appointment_id,
+        checkin: selectedAppointment.checkin,
+        status: selectedAppointment.status,
+        name: fullName,
+        phone_number: selectedAppointment.phone_number,
+        age: selectedAppointment.age,
+        sex: selectedAppointment.sex,
+        location: selectedAppointment.location,
+        guardian: selectedAppointment.guardian,
+        disease: selectedAppointment.disease,
+        paid: selectedAppointment.paid,
+        mode: selectedAppointment.mode,
+        fees_paid: selectedAppointment.fees_paid
+      };
+      
+      // Call API to update
+      await updateAppointmentDetails(updateData);
+      
+      // Update local state
+      setAppointments(prev => 
+        prev.map(apt => 
+          apt.appointment_id === selectedAppointment.appointment_id 
+            ? { 
+                ...apt, 
+                ...updateData,
+                patientName: fullName
+              } 
+            : apt
+        )
+      );
+      
+      showSuccessSnackbar("Appointment updated successfully", 500);
+      handleEditModalClose();
+      
+    } catch (error) {
+      console.error("Failed to update appointment:", error);
+      setUpdateError(error.message || "Update failed");
+      showErrorSnackbar("Failed to update appointment. Please try again.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Function to handle patient search in edit modal
   const handleEditMobileSearch = async (value) => {
     if (!value || value.length !== 10) {
       setEditMobileSearchResults([]);
@@ -173,13 +211,21 @@ const MobileAppointmentTable = () => {
     }
   };
 
+  // Function to handle patient selection in edit modal
   const handleEditPatientSelect = (patient) => {
     if (patient) {
+      // Split the patient name for the modal form
+      const fullName = patient.name || '';
+      const nameParts = fullName.split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+      
       setSelectedAppointment(prev => ({
         ...prev,
         phone_number: patient.phone_number,
-        firstName: patient.name.split(" ")[0] || "",
-        lastName: patient.name.split(" ").slice(1).join(" ") || "",
+        patientName: patient.name || "",
+        firstName: firstName,
+        lastName: lastName,
         age: patient.age || "",
         sex: patient.gender || "",
         location: patient.location || "",
@@ -189,58 +235,7 @@ const MobileAppointmentTable = () => {
     }
   };
 
-  const handleConfirmEdit = async () => {
-    if (!selectedAppointment) return;
-
-    setIsUpdating(true);
-    try {
-      const fullName = `${selectedAppointment.firstName} ${selectedAppointment.lastName}`.trim();
-      
-      const payload = {
-        token: selectedAppointment.token,
-        appointment_id: selectedAppointment.appointment_id,
-        name: fullName.toUpperCase(),
-        guardian: `${selectedAppointment.guardian || ""}`.toUpperCase(),
-        checkin: selectedAppointment.checkin,
-        paid: selectedAppointment.paid,
-        mode: selectedAppointment.mode || "",
-        fees_paid: selectedAppointment.fees_paid || 0,
-        disease: selectedAppointment.disease || null,
-        appointment_type: selectedAppointment.appointment_type || "New",
-        phone_number: selectedAppointment.phone_number || "",
-        age: selectedAppointment.age || "",
-        gender: selectedAppointment.sex || "",
-        location: selectedAppointment.location || "",
-      };
-
-      const response = await updateAppointmentDetails(payload);
-      console.log("Update response:", response);
-
-      
-      handleEditModalClose();
-    } catch (error) {
-      console.error("Failed to update appointment:", error);
-      
-      // Add better error handling
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error("Server error:", error.response.data);
-        setError(`Update failed: ${error.response.data.message || 'Server error'}`);
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error("No response received:", error.request);
-        setError("Update failed: No response from server");
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error("Error message:", error.message);
-        setError(`Update failed: ${error.message}`);
-      }
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
+  // Handle appointment cancellation
   const handleCancelAppointment = async () => {
     if (!rowToCancel) return;
     
@@ -256,221 +251,177 @@ const MobileAppointmentTable = () => {
 
       setCancelConfirmationOpen(false);
       handleEditModalClose();
+      showSuccessSnackbar("Appointment cancelled successfully");
       
     } catch (error) {
       console.error("Failed to cancel appointment:", error);
-      
-      // Enhanced error handling
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
-        console.error("Server error:", error.response.data);
-        setError(`Cancellation failed: ${error.response.data.message || 'Server error'}`);
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error("No response received:", error.request);
-        setError("Cancellation failed: No response from server");
-      } else {
-        // Something happened in setting up the request that triggered an Error
-        console.error("Error message:", error.message);
-        setError(`Cancellation failed: ${error.message}`);
-      }
-      
-      // Keep the modal open so the user can see the error
-      setCancelConfirmationOpen(false);
+      showErrorSnackbar("Failed to cancel appointment. Please try again.");
     } finally {
       setIsCanceling(false);
       setRowToCancel(null);
     }
   };
 
+  // Fetch appointments data
   const fetchAppointmentsData = async () => {
+    if (!cabinId || !selectedSlot) {
+      console.error("Missing cabin ID or selected slot");
+      setError("Configuration error. Please log in again.");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     try {
-      setLoading(true);
-      let data;
-              // Use the real API for production mode
-        data = await fetchAppointments(cabinId, selectedSlot);
+      const fetchedAppointments = await fetchAppointmentsApi(cabinId, selectedSlot);
+      console.log(`Fetched ${fetchedAppointments.length} appointments:`, fetchedAppointments);
       
-      if (data && data.length > 0) {
-        console.log("Received appointment data:", data);
+      const formattedAppointments = fetchedAppointments.map(apt => {
+        // API returns 'name' property, not 'patient_name'
+        const patientName = apt.patient_name || apt.name || '';
         
-        // Debug log for diagnosing paid status
-        data.forEach(item => {
-          console.log(`Appointment ${item.token} - ${item.name} - Paid: ${item.paid} - Status: ${item.status}`);
-        });
-        
-        const formatted = data.map((item) => ({
-          id: item.token,
-          token: item.token,
-          patientName: item.name || '',
-          checkin: item.checkin,
-          // Only force paid = true if status is done_checkup AND paid is true in the API response
-          paid: item.paid === true,
-          status: item.status,
-          guardian: item?.patient?.guardian || "",
+        return {
+          id: apt.appointment_id || apt.token || Math.random().toString(36).substr(2, 9),
+          token: apt.token || "",
+          appointment_id: apt.appointment_id,
+          patientName: patientName,
+          checkin: apt.checkin || false,
+          paid: apt.paid || false,
+          status: apt.status || "pending",
+          sex: apt.sex || (apt.patient?.gender) || "",
+          guardian: apt.guardian_name || (apt.patient?.guardian) || "",
+          phone_number: apt.phone_number || (apt.patient?.phone_number) || "",
+          age: apt.age || (apt.patient?.age) || "",
+          location: apt.location || (apt.patient?.location) || "",
+          disease: apt.disease || "",
           isPlaceholder: false,
-          appointment_id: item.appointment_id,
-          mode: item.mode || "cash",
-          fees_paid: item.fees_paid || 0,
-          disease: item.disease || null,
-          appointment_type: item.appointment_type,
-          phone_number: item?.patient?.phone_number || "",
-          age: item?.patient?.age || "",
-          sex: item?.patient?.gender || "",
-          location: item?.patient?.location || "",
-        }));
-
-        // Debug log for diagnosing formatted appointments
-        formatted.forEach(item => {
-          console.log(`Formatted ${item.token} - ${item.patientName} - Paid: ${item.paid}`);
-        });
-
-        setAppointments(formatted);
-      } else {
-        console.log("No appointment data received or empty data array");
-        setAppointments([]);
-      }
+        };
+      });
+      
+      console.log("Formatted appointments:", formattedAppointments);
+      setAppointments(formattedAppointments);
+      setError(null);
     } catch (err) {
-      console.error("Failed to load appointments:", err);
-      setError("Failed to load appointments");
-      setAppointments([]);
+      console.error("Error fetching appointments:", err);
+      setError("Failed to load appointments. Please try again.");
+      showErrorSnackbar("Failed to load appointments. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Add SSE for real-time appointment updates
+  // Initial fetch on component mount
+  useEffect(() => {
+    if (cabinId && selectedSlot) {
+      fetchAppointmentsData();
+    }
+  }, [cabinId, selectedSlot]);
+
+  // Setup WebSocket subscription for real-time updates
   useEffect(() => {
     if (!cabinId || !selectedSlot) return;
 
-    let reconnectAttempt = 0;
-    let reconnectTimer = null;
+    console.log("Setting up WebSocket subscription for appointments in Mobile view");
+    
+    // Subscribe to appointment updates
+    const unsubscribe = webSocketService.subscribe('appointment', (response) => {
+      console.log("Received appointment update via WebSocket in Mobile view:", response);
+      
+      try {
+        // Check for the right message format
+        let appointmentData = null;
+        
+        if (response.data && response.data.type === "appointment_update" && response.data.data && response.data.data.appointment) {
+          appointmentData = response.data.data.appointment;
+        } else if (response.data && response.data.type === "queue_update" && response.data.data && response.data.data.appointment) {
+          appointmentData = response.data.data.appointment;
+        } else if (response.appointment) {
+          appointmentData = response.appointment;
+        }
+        
+        if (appointmentData) {
+          setAppointments(prevAppointments => {
+            // Get patient data safely
+            const patientData = appointmentData.patient || {};
+            
+            // Format the appointment for our component's state structure
+            const formattedAppointment = {
+              id: appointmentData.appointment_id,
+              token: appointmentData.token || "",
+              appointment_id: appointmentData.appointment_id,
+              patientName: appointmentData.name || appointmentData.patient_name || "",
+              checkin: appointmentData.checkin || false,
+              paid: appointmentData.paid || false,
+              status: appointmentData.status || "pending",
+              sex: appointmentData.sex || patientData.gender || "",
+              guardian: appointmentData.guardian || patientData.guardian || "",
+              phone_number: appointmentData.phone_number || patientData.phone_number || "",
+              age: appointmentData.age || patientData.age || "",
+              location: appointmentData.location || patientData.location || "",
+              disease: appointmentData.disease || "",
+              mode: appointmentData.mode || "cash",
+              fees_paid: appointmentData.fees_paid || 0,
+              appointment_type: appointmentData.appointment_type || "New",
+              isPlaceholder: false
+            };
 
-    const connectEventSource = () => {
-      // Create formatted date for the SSE URL
-      const date = new Date(selectedSlot);
-      const formattedDate = date
-        .toISOString()
-        .replace(".000", "")
-        .replace("T", " ")
-        .replace("Z", "+00:00");
-      const sseUrl = `${API_BASE_URL}/doctorinfo/queue_updates/${cabinId}/${formattedDate}`;
-
-      // Close existing connection if any
-      if (eventSource) {
-        eventSource.close();
-      }
-
-      // Create new connection
-      const newEventSource = new EventSource(sseUrl, { withCredentials: true });
-      setEventSource(newEventSource);
-
-      // Handle incoming messages
-      newEventSource.onmessage = async (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log("SSE Update received:", data);
-
-          if (data.appointment) {
-            setAppointments(prevAppointments => {
-              const updatedAppointment = {
-                id: data.appointment.token,
-                token: data.appointment.token,
-                patientName: data.appointment.name || '',
-                checkin: data.appointment.checkin,
-                paid: data.appointment.paid === true,
-                status: data.appointment.status,
-                guardian: data.appointment?.patient?.guardian || "",
-                isPlaceholder: false,
-                appointment_id: data.appointment.appointment_id,
-                mode: data.appointment.mode || "cash",
-                fees_paid: data.appointment.fees_paid || 0,
-                disease: data.appointment.disease || null,
-                appointment_type: data.appointment.appointment_type,
-                phone_number: data.appointment?.patient?.phone_number || "",
-                age: data.appointment?.patient?.age || "",
-                sex: data.appointment?.patient?.gender || "",
-                location: data.appointment?.patient?.location || "",
+            // Check if we already have this appointment
+            const existingIndex = prevAppointments.findIndex(
+              a => a.appointment_id === appointmentData.appointment_id
+            );
+            
+            if (existingIndex !== -1) {
+              // Update existing appointment while preserving any local state
+              const newAppointments = [...prevAppointments];
+              newAppointments[existingIndex] = {
+                ...newAppointments[existingIndex],
+                ...formattedAppointment
               };
-
-              // Find if this appointment already exists
-              const existingIndex = prevAppointments.findIndex(
-                apt => apt.appointment_id === updatedAppointment.appointment_id
-              );
-
-              if (existingIndex !== -1) {
-                // Update existing appointment
-                const newAppointments = [...prevAppointments];
-                newAppointments[existingIndex] = updatedAppointment;
-                return newAppointments;
-              } else {
-                // Add new appointment
-                return [...prevAppointments, updatedAppointment]
-                  .sort((a, b) => Number(a.token) - Number(b.token));
-              }
-            });
-          }
-        } catch (error) {
-          console.error("Error processing SSE update:", error);
+              return newAppointments;
+            } else {
+              // Add new appointment
+              return [...prevAppointments, formattedAppointment];
+            }
+          });
         }
-      };
-
-      // Handle connection errors with reconnection logic
-      newEventSource.onerror = (error) => {
-        console.error("SSE connection error:", error);
-        newEventSource.close();
-        
-        // Calculate delay with exponential backoff, capped at 30 seconds
-        const delay = Math.min(1000 * (2 ** reconnectAttempt), 30000);
-        reconnectAttempt++;
-        
-        console.log(`Attempting to reconnect in ${delay/1000} seconds...`);
-        reconnectTimer = setTimeout(() => {
-          console.log('Reconnecting to SSE...');
-          connectEventSource();
-        }, delay);
-      };
-
-      return newEventSource;
-    };
-
-    // Initial connection
-    const newEventSource = connectEventSource();
-
-    // Handle visibility changes
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('Tab is now visible, checking SSE connection state in MobileAppointmentTable');
-        // Only reconnect if the connection is closed or in an error state
-        if (!newEventSource || newEventSource.readyState === EventSource.CLOSED) {
-          console.log('Re-establishing SSE connection in MobileAppointmentTable');
-          reconnectAttempt = 0; // Reset reconnection attempt counter
-          connectEventSource();
-        } else {
-          console.log('SSE connection is already active in MobileAppointmentTable');
-        }
+      } catch (error) {
+        console.error("Error processing WebSocket appointment data in Mobile view:", error);
       }
-    };
+    });
 
-    // Listen for visibility change events
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Cleanup on unmount
     return () => {
-      if (newEventSource) {
-        newEventSource.close();
-        console.log("SSE connection closed");
-      }
-      if (reconnectTimer) {
-        clearTimeout(reconnectTimer);
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      unsubscribe();
     };
   }, [cabinId, selectedSlot]);
 
-  useEffect(() => {
-    fetchAppointmentsData();
-  }, []);
+  // Apply filters and search
+  const filteredAppointments = useMemo(() => {
+    return appointments
+      .filter(apt => {
+        // Filter by status
+        if (filterStatus !== 'all') {
+          return apt.status === filterStatus;
+        }
+        return true;
+      })
+      .filter(apt => {
+        // Search by patient name or token
+        if (!searchQuery) return true;
+        
+        const query = searchQuery.toLowerCase();
+        return (
+          apt.patientName?.toLowerCase().includes(query) ||
+          apt.token?.toString().includes(query)
+        );
+      })
+      // Sort by token number
+      .sort((a, b) => {
+        // Convert token to number for proper sorting
+        const tokenA = parseInt(a.token) || 0;
+        const tokenB = parseInt(b.token) || 0;
+        return tokenA - tokenB;
+      });
+  }, [appointments, filterStatus, searchQuery]);
 
   // Render functions
   const renderEditModal = () => (
@@ -490,7 +441,7 @@ const MobileAppointmentTable = () => {
         }
       }}
     >
-      <DialogTitle sx={{ 
+      <Box sx={{ 
         position: "relative", 
         p: 0, 
         pb: 1,
@@ -511,7 +462,7 @@ const MobileAppointmentTable = () => {
         >
           <CloseIcon fontSize="small" />
         </IconButton>
-      </DialogTitle>
+      </Box>
       <DialogContent sx={{ p: 0, pt: 1 }}>
         {selectedAppointment && (
           <Box
@@ -907,7 +858,7 @@ const MobileAppointmentTable = () => {
         </Button>
         <Button
           variant="contained"
-          onClick={handleConfirmEdit}
+          onClick={handleEditSubmit}
           disabled={isUpdating}
           sx={{ 
             fontSize: '0.75rem',
@@ -1073,7 +1024,7 @@ const MobileAppointmentTable = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {displayRows.map((appointment) => (
+              {filteredAppointments.map((appointment) => (
                 <TableRow 
                   key={appointment.token}
                   onClick={() => !appointment.isPlaceholder && handleEditClick(appointment)}
@@ -1188,6 +1139,4 @@ const MobileAppointmentTable = () => {
       {renderCancelConfirmationDialog()}
     </Box>
   );
-};
-
-export default MobileAppointmentTable;
+}
