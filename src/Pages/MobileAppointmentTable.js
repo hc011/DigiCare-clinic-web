@@ -647,10 +647,10 @@ export default function MobileAppointmentTable() {
                       setSelectedAppointment((prev) => ({
                         ...prev,
                         paid: isPaid,
-                        // If becoming paid, keep existing values or set defaults
+                        // If becoming paid, set default mode and fees if not already set
                         // If becoming unpaid, set mode to empty and fees to 0
-                        mode: isPaid ? (prev.mode) : "",
-                        fees_paid: isPaid ? prev.fees_paid : 0
+                        mode: isPaid ? (prev.mode || "cash") : "",
+                        fees_paid: isPaid ? (prev.fees_paid > 0 ? prev.fees_paid : 250) : 0
                       }));
                     }}
                     size="small"
