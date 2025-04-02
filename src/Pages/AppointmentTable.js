@@ -387,14 +387,14 @@ export default function AppointmentTable() {
         const nameParts = patientName.split(' ');
         
         return {
-          id: appointment.appointment_id || appointment.token || Math.random().toString(36).substr(2, 9),
+          id: appointment.appointment_id || appointment.token,
           token: appointment.token || "",
           appointment_id: appointment.appointment_id,
           firstName: nameParts[0] || "",
           lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
           checkin: appointment.checkin || false,
           paid: appointment.paid || false,
-          mode: appointment.payment_mode || appointment.mode || "cash",
+          mode: appointment.payment_mode || appointment.mode || '-',
           fees_paid: appointment.fees_paid || 0,
           status: appointment.status || "pending",
           disease: appointment.disease || "",
@@ -403,7 +403,7 @@ export default function AppointmentTable() {
           location: appointment.location || (appointment.patient?.location) || "",
           sex: appointment.sex || (appointment.patient?.gender) || "",
           guardian: appointment.guardian_name || (appointment.patient?.guardian) || "",
-          appointment_type: appointment.appointment_type || "New",
+          appointment_type: appointment.appointment_type ,
           isPlaceholder: false,
         };
       });

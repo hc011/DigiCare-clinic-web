@@ -294,6 +294,9 @@ export default function MobileAppointmentTable() {
           age: apt.age || (apt.patient?.age) || "",
           location: apt.location || (apt.patient?.location) || "",
           disease: apt.disease || "",
+          mode: apt.mode || "",
+          fees_paid: apt.fees_paid || 0,
+          appointment_type: apt.appointment_type || "New",
           isPlaceholder: false,
         };
       });
@@ -632,14 +635,24 @@ export default function MobileAppointmentTable() {
                 control={
                   <Checkbox
                     checked={selectedAppointment.paid}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const isPaid = e.target.checked;
+                      // Log the current values for debugging
+                      console.log("Current payment values:", {
+                        paid: selectedAppointment.paid,
+                        mode: selectedAppointment.mode,
+                        fees_paid: selectedAppointment.fees_paid
+                      });
+                      
                       setSelectedAppointment((prev) => ({
                         ...prev,
-                        paid: e.target.checked,
-                        mode: e.target.checked ? prev.mode || "cash" : "",
-                        fees_paid: e.target.checked ? prev.fees_paid || 250 : 0,
-                      }))
-                    }
+                        paid: isPaid,
+                        // If becoming paid, keep existing values or set defaults
+                        // If becoming unpaid, set mode to empty and fees to 0
+                        mode: isPaid ? (prev.mode) : "",
+                        fees_paid: isPaid ? prev.fees_paid : 0
+                      }));
+                    }}
                     size="small"
                   />
                 }
@@ -687,12 +700,14 @@ export default function MobileAppointmentTable() {
                   label="Fees"
                   type="number"
                   value={selectedAppointment.fees_paid || 0}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    // Ensure the value is treated as a number
+                    const feesValue = e.target.value !== "" ? Number(e.target.value) : 0;
                     setSelectedAppointment((prev) => ({
                       ...prev,
-                      fees_paid: Number(e.target.value),
-                    }))
-                  }
+                      fees_paid: feesValue,
+                    }));
+                  }}
                   InputProps={{ style: { fontSize: '0.85rem' } }}
                   InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                   size="small"
