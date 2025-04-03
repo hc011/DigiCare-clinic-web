@@ -16,6 +16,10 @@ export function fixMobilePatientItems() {
       // Only process items that haven't been fixed yet
       if (item.dataset.mobilefixed) return;
       
+      // Preserve important data attributes before manipulating the DOM
+      const isLate = item.dataset.late === "true";
+      const appointmentId = item.dataset.appointmentId;
+      
       const content = item.querySelector('.patient-content');
       if (!content) return;
       
@@ -31,16 +35,17 @@ export function fixMobilePatientItems() {
       const wrapper = document.createElement('div');
       wrapper.className = 'token-and-details';
       
-      // Move elements into new structure
-      wrapper.appendChild(tokenBadge.cloneNode(true));
-      wrapper.appendChild(patientDetails.cloneNode(true));
+      // IMPORTANT: Instead of cloning, move the actual elements
+      // This preserves React's ability to update them later
+      wrapper.appendChild(tokenBadge);
+      wrapper.appendChild(patientDetails);
       
       // IMPORTANT: Remove dragHandle from content before clearing (preserve it with its event listeners)
       if (dragHandle) {
         content.removeChild(dragHandle);
       }
       
-      // Clear content and rebuild
+      // Clear remaining content
       while (content.firstChild) {
         content.removeChild(content.firstChild);
       }
@@ -64,6 +69,33 @@ export function fixMobilePatientItems() {
         
         // Make sure it's visible
         dragHandle.style.opacity = '0.9';
+      }
+      
+      // Double-check that status chips (especially "late") are still present
+      if (isLate) {
+        // Ensure the late class is still applied
+        item.classList.add("late");
+        
+        // Find status tags container
+        const statusTags = patientDetails.querySelector('.status-tags');
+        if (statusTags) {
+          // Check if late chip is missing
+          const lateChip = statusTags.querySelector('.late-chip');
+          if (!lateChip) {
+            // Manually add late chip if missing
+            const lateChipHTML = `
+              <span class="late-chip MuiChip-root MuiChip-outlined MuiChip-sizeSmall MuiChip-colorError">
+                <span class="MuiChip-icon">
+                  <span class="material-icons MuiIcon-root MuiIcon-fontSizeSmall">access_time</span>
+                </span>
+                <span class="MuiChip-label">Late</span>
+              </span>
+            `;
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = lateChipHTML;
+            statusTags.appendChild(tempDiv.firstChild);
+          }
+        }
       }
       
       // Mark as fixed

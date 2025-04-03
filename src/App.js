@@ -157,7 +157,7 @@ const App = () => {
                 status: queueData.status,
                 paid: queueData.paid,
                 checkin: queueData.checkin,
-                late: queueData.late || false
+                late: queueData.late
               };
               
               if (existingPatientIndex !== -1) {
