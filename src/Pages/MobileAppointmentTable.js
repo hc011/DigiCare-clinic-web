@@ -157,7 +157,8 @@ export default function MobileAppointmentTable() {
         disease: selectedAppointment.disease,
         paid: selectedAppointment.paid,
         mode: selectedAppointment.mode,
-        fees_paid: selectedAppointment.fees_paid
+        fees_paid: selectedAppointment.fees_paid,
+        appointment_type: selectedAppointment.appointment_type
       };
       
       // Call API to update
