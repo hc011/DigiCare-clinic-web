@@ -72,7 +72,22 @@ const App = () => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         console.log('Tab is now visible, checking WebSocket connection state');
-        if (!webSocketService.ws || webSocketService.ws.readyState === WebSocket.CLOSED) {
+        console.log('Current wasClosedDueToInactivity flag:', webSocketService.wasClosedDueToInactivity);
+        
+        // Use the new connection checking method that handles inactivity reconnection
+        const { shouldReload, connectionState } = webSocketService.checkConnection();
+        console.log('checkConnection result:', { shouldReload, connectionState });
+        
+        if (shouldReload) {
+          console.log('Connection was closed due to inactivity, reloading page');
+          // Reset the flag before reloading to ensure it's in the correct state
+          webSocketService.wasClosedDueToInactivity = false;
+          window.location.reload();
+          return;
+        }
+        
+        // Original reconnection logic for other cases
+        if (!webSocketService.ws || connectionState === WebSocket.CLOSED) {
           console.log('WebSocket connection needs to be re-established');
           webSocketService.reconnectAttempt = 0;
           webSocketService.connect(cabinId, selectedSlot);
@@ -80,10 +95,18 @@ const App = () => {
       }
     };
 
+    // Add beforeunload event to force close the WebSocket when page unloads
+    const handleBeforeUnload = () => {
+      console.log('Page is being unloaded, force closing WebSocket connection');
+      webSocketService.disconnect(true); // Force close the connection
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
       webSocketService.disconnect();
     };
   }, [cabinId, selectedSlot, currentUser]);

@@ -11,12 +11,107 @@ class WebSocketService {
     this.cabinId = null;
     this.selectedSlot = null;
     this.activeConnections = 0;
+    
+    // New properties for enhanced connection management
+    this.inactivityTimer = null;
+    this.inactivityTimeout = 10000; // 1 minute of inactivity before closing
+    this.wasClosedDueToInactivity = false;
+    
+    // Initialize visibility and page lifecycle event handlers
+    this.initializeEventHandlers();
+  }
+  
+  // Initialize browser event handlers for proper connection management
+  initializeEventHandlers() {
+    // This method sets up browser-level events that affect WebSocket connections
+    // These are registered once when the service is created
+    
+    if (typeof window !== 'undefined') {
+      // Use pagehide event as a more reliable alternative to beforeunload for mobile
+      const terminationEvent = 'onpagehide' in window ? 'pagehide' : 'unload';
+      
+      window.addEventListener(terminationEvent, (event) => {
+        // Only close if the page is actually being unloaded (not put in bfcache)
+        if (!event.persisted) {
+          console.log(`WebSocketService: ${terminationEvent} event detected, closing connection`);
+          this.disconnect(true);
+        }
+      }, false);
+      
+      // Handle visibility changes to manage connections when app goes to background
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+          console.log('WebSocketService: Tab hidden, starting inactivity timer');
+          this.startInactivityTimer();
+        } else if (document.visibilityState === 'visible') {
+          console.log('WebSocketService: Tab visible again');
+          this.clearInactivityTimer();
+          
+          // Check if connection was closed due to inactivity
+          if (this.wasClosedDueToInactivity) {
+            console.log('WebSocketService: Reconnecting after inactivity timeout');
+            this.wasClosedDueToInactivity = false;
+            
+            // If we have valid connection parameters, reconnect
+            if (this.cabinId && this.selectedSlot) {
+              this.reconnectAttempt = 0;
+              this.connect(this.cabinId, this.selectedSlot);
+            }
+          }
+        }
+      });
+    }
+  }
+  
+  // Start inactivity timer when tab goes to background
+  startInactivityTimer() {
+    // Clear any existing timer first
+    this.clearInactivityTimer();
+    
+    // Only start timer if we have an active connection
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      console.log(`WebSocketService: Starting inactivity timer for ${this.inactivityTimeout/1000} seconds`);
+      
+      this.inactivityTimer = setTimeout(() => {
+        console.log('WebSocketService: Inactivity timeout reached, closing connection');
+        
+        // Mark that this closure was due to inactivity
+        this.wasClosedDueToInactivity = true;
+        console.log('WebSocketService: Set wasClosedDueToInactivity flag to true');
+        
+        // Force close the connection
+        this.disconnect(true);
+        
+        // Store connection closed state in sessionStorage for potential page reloads
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.setItem('websocketClosedDueToInactivity', 'true');
+          console.log('WebSocketService: Stored inactivity closure in sessionStorage');
+        }
+      }, this.inactivityTimeout);
+    }
+  }
+  
+  // Clear inactivity timer
+  clearInactivityTimer() {
+    if (this.inactivityTimer) {
+      console.log('WebSocketService: Clearing inactivity timer');
+      clearTimeout(this.inactivityTimer);
+      this.inactivityTimer = null;
+    }
   }
 
   connect(cabinId, selectedSlot) {
     if (!cabinId || !selectedSlot) {
       console.error("Cannot connect WebSocket: missing cabinId or selectedSlot");
       return;
+    }
+    
+    // Check for reconnection after inactivity from previous page load
+    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('websocketClosedDueToInactivity') === 'true') {
+      console.log('WebSocketService: Detected previous inactivity closure, reconnecting with clean state');
+      this.wasClosedDueToInactivity = true; // Set the flag to true when reconnecting after inactivity
+      console.log('WebSocketService: Set wasClosedDueToInactivity flag to true during reconnection');
+      sessionStorage.removeItem('websocketClosedDueToInactivity');
     }
     
     // If we already have an active connection with the same parameters, just increment the counter
@@ -62,6 +157,7 @@ class WebSocketService {
       this.ws.onopen = () => {
         console.log("WebSocket connected successfully");
         this.reconnectAttempt = 0;
+        this.wasClosedDueToInactivity = false;
       };
       
       this.ws.onmessage = (event) => {
@@ -81,7 +177,6 @@ class WebSocketService {
           } 
           
           if (response.data && response.data.type === "queue_update" && response.data?.data?.cabinslot) {
-
             console.log("Cabin slot update received, notifying subscribers");
             this.notifySubscribers("cabinslot", response);
           }
@@ -109,9 +204,9 @@ class WebSocketService {
   handleReconnect() {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     
-    // Only attempt reconnection if we have active subscribers
-    if (this.activeConnections === 0) {
-      console.log("No active connections, skipping reconnection");
+    // Don't attempt reconnection if closed due to inactivity or no active connections
+    if (this.wasClosedDueToInactivity || this.activeConnections === 0) {
+      console.log(`No reconnection attempt: ${this.wasClosedDueToInactivity ? 'closed due to inactivity' : 'no active connections'}`);
       return;
     }
     
@@ -127,6 +222,9 @@ class WebSocketService {
   }
   
   disconnect(forceClose = false) {
+    // Clear any inactivity timer first
+    this.clearInactivityTimer();
+    
     // Decrement active connections counter
     this.activeConnections = Math.max(0, this.activeConnections - 1);
     
@@ -135,7 +233,17 @@ class WebSocketService {
       if (this.ws) {
         console.log("Closing WebSocket connection - " + 
           (forceClose ? "forced close" : "no more active connections"));
-        this.ws.close();
+          
+        // Disable onclose handler first to prevent reconnection attempts during intentional closure
+        const originalOnClose = this.ws.onclose;
+        this.ws.onclose = function() {};
+        
+        try {
+          this.ws.close(1000, forceClose ? "Force close" : "Normal closure");
+        } catch (err) {
+          console.error("Error closing WebSocket:", err);
+        }
+        
         this.ws = null;
       }
       
@@ -175,14 +283,37 @@ class WebSocketService {
     }
   }
 
+  // Check connection status and potentially reload page
+  checkConnection() {
+    if (this.wasClosedDueToInactivity) {
+      console.log('WebSocketService: Connection was closed due to inactivity');
+      
+      // Determine if page reload is needed
+      if (this.cabinId && this.selectedSlot) {
+        // Don't reset the flag here, let the caller handle it after reload
+        return { shouldReload: true };
+      }
+    }
+    
+    // Only reset the flag if we're not reloading
+    // We'll let the caller reset it after handling the reload decision
+    return { 
+      shouldReload: false, 
+      connectionState: this.ws ? this.ws.readyState : WebSocket.CLOSED 
+    };
+  }
+
   // Create a method to handle cleanup on logout
   cleanupOnLogout() {
     console.log("WebSocketService: Cleaning up connections on logout");
+    this.clearInactivityTimer();
     this.activeConnections = 0;
     this.disconnect(true); // Force close on logout
     this.cabinId = null;
     this.selectedSlot = null;
     this.reconnectAttempt = 0;
+    this.wasClosedDueToInactivity = false;
+    
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -195,6 +326,14 @@ class WebSocketService {
       cabinslot: []
     };
     console.log("WebSocketService: Cleanup complete");
+  }
+
+  // Set the inactivity timeout (in milliseconds)
+  setInactivityTimeout(timeout) {
+    if (timeout && typeof timeout === 'number' && timeout > 0) {
+      console.log(`WebSocketService: Setting inactivity timeout to ${timeout/1000} seconds`);
+      this.inactivityTimeout = timeout;
+    }
   }
 }
 
