@@ -673,7 +673,7 @@ export default function AppointmentTable() {
       const result = await addAppointment({
         cabinId: cabinId,
         slot: selectedSlot,
-        name: `${newEntry.firstName} ${newEntry.lastName}`,
+        name: newEntry.name,
         token: newEntry.token,
         disease: newEntry.disease,
         appointment_type: newEntry.appointment_type,
@@ -693,7 +693,7 @@ export default function AppointmentTable() {
         token: result?.queue?.appointment?.token ,
         appointment_id: result?.queue?.appointment?.appointment_id || "",
         firstName: result?.queue?.appointment?.name?.split(" ")[0] || "",
-        lastName: result?.queue?.appointment?.name?.split(" ")[1] || "",
+        lastName: result?.queue?.appointment?.name?.split(" ").slice(1).join(" ") || "",
         checkin: result?.queue?.checkin || false,
         paid: result?.queue?.paid || false,
         status: result?.queue?.status || "",
@@ -771,8 +771,7 @@ export default function AppointmentTable() {
       id: parseInt(newAppointment.token),
       token: parseInt(newAppointment.token),
       appointment_id: newAppointment.appointment_id,
-      firstName: trimmedFirstName.toUpperCase(),
-      lastName: trimmedLastName.toUpperCase(),
+      name: `${trimmedFirstName} ${trimmedLastName}`.toUpperCase(),
       checkin: newAppointment.checkin,
       paid: newAppointment.paid,
       status: newAppointment.status,
@@ -1275,11 +1274,16 @@ export default function AppointmentTable() {
 
   const handlePatientSelect = (patient) => {
     if (patient) {
+      // Split the name into first and last name for the form fields
+      const nameParts = patient.name.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
       setNewAppointment(prev => ({
         ...prev,
         phone_number: patient.phone_number,
-        firstName: patient.name.split(" ")[0] || "",
-        lastName: patient.name.split(" ").slice(1).join(" ") || "",
+        firstName: firstName,
+        lastName: lastName,
         age: patient.age || "",
         sex: patient.gender || "",
         location: patient.location || "",
@@ -1313,11 +1317,16 @@ export default function AppointmentTable() {
 
   const handleEditPatientSelect = (patient) => {
     if (patient) {
+      // Split the name into first and last name for the form fields
+      const nameParts = patient.name.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
       setSelectedAppointment(prev => ({
         ...prev,
         phone_number: patient.phone_number,
-        firstName: patient.name.split(" ")[0] || "",
-        lastName: patient.name.split(" ").slice(1).join(" ") || "",
+        firstName: firstName,
+        lastName: lastName,
         age: patient.age || "",
         sex: patient.gender || "",
         location: patient.location || "",

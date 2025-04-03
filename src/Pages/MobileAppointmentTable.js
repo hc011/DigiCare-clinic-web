@@ -700,13 +700,12 @@ export default function MobileAppointmentTable() {
                   fullWidth
                   label="Fees"
                   type="number"
-                  value={selectedAppointment.fees_paid || 0}
+                  value={selectedAppointment.fees_paid === 0 ? "" : selectedAppointment.fees_paid}
                   onChange={(e) => {
-                    // Ensure the value is treated as a number
-                    const feesValue = e.target.value !== "" ? Number(e.target.value) : 0;
+                    const value = e.target.value;
                     setSelectedAppointment((prev) => ({
                       ...prev,
-                      fees_paid: feesValue,
+                      fees_paid: value === "" ? 0 : Number(value),
                     }));
                   }}
                   InputProps={{ style: { fontSize: '0.85rem' } }}
