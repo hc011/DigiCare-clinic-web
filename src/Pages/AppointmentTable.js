@@ -278,10 +278,10 @@ export default function AppointmentTable() {
   };
 
   useEffect(() => {
-    if (cabinId && selectedSlot && !loading && appointments.length === 0) {
+    if (cabinId && selectedSlot && !loading) {
       getAppointments();
     }
-  }, [cabinId, selectedSlot, loading, appointments.length]);
+  }, [cabinId, selectedSlot]);
 
   // Setup WebSocket subscription for real-time updates
   useEffect(() => {
