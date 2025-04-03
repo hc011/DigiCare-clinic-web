@@ -1048,7 +1048,11 @@ export default function PastAppointments() {
                 ));
                 handleDateChange(utcDate);
               }}
-              maxDate={new Date()}
+              maxDate={(() => {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                return yesterday;
+              })()}
               slotProps={{ 
                 textField: { 
                   size: 'small', 
