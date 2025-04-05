@@ -62,6 +62,45 @@ const getStatusColor = (status) => {
   }
 };
 
+// Function to generate display rows with placeholders for missing tokens
+function generateDisplayRows(actualRows) {
+  if (actualRows.length === 0) return [];
+
+  const tokens = actualRows.map((row) => parseInt(row.token) || 0);
+  const minToken = Math.min(...tokens);
+  const maxToken = Math.max(...tokens);
+
+  const allTokens = Array.from(
+    { length: maxToken - minToken + 1 },
+    (_, i) => minToken + i
+  );
+
+  const tokenMap = new Map(actualRows.map((row) => [parseInt(row.token) || 0, row]));
+
+  return allTokens.map((token) => {
+    const existing = tokenMap.get(token);
+    return (
+      existing || {
+        id: token.toString(),
+        token: token.toString(),
+        appointment_id: "",
+        patientName: "",
+        checkin: false,
+        paid: false,
+        status: "",
+        disease: "",
+        age: "",
+        phone_number: "",
+        location: "",
+        sex: "",
+        guardian: "",
+        appointment_type: "",
+        isPlaceholder: true,
+      }
+    );
+  });
+}
+
 export default function MobileAppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
   const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
@@ -426,6 +465,12 @@ export default function MobileAppointmentTable() {
         return tokenA - tokenB;
       });
   }, [appointments, filterStatus, searchQuery]);
+
+  // Generate display rows with placeholders for missing tokens
+  const displayedRows = useMemo(() => 
+    generateDisplayRows(filteredAppointments), 
+    [filteredAppointments]
+  );
 
   // Render functions
   const renderEditModal = () => (
@@ -1015,7 +1060,7 @@ export default function MobileAppointmentTable() {
         <Typography color="error" align="center" sx={{ mt: 2 }}>
           {error}
         </Typography>
-      ) : filteredAppointments.length === 0 ? (
+      ) : displayedRows.length === 0 ? (
         <Typography align="center" sx={{ mt: 2 }}>
           No appointments found
         </Typography>
@@ -1039,7 +1084,7 @@ export default function MobileAppointmentTable() {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredAppointments.map((appointment) => (
+              {displayedRows.map((appointment) => (
                 <TableRow 
                   key={appointment.token}
                   onClick={() => !appointment.isPlaceholder && handleEditClick(appointment)}

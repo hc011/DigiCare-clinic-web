@@ -1550,7 +1550,7 @@ export default function AppointmentTable() {
         {renderEditModal()}
 
         <DataGrid
-          rows={rows}
+          rows={displayedRows}
           columns={columns}
           slots={{ toolbar: CustomToolbar }}
           paginationModel={paginationModel}
