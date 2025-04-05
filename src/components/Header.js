@@ -28,7 +28,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import "./Header.module.css";
 import { getPatientProfile, getPatientDetails } from "../services/api";
 
-function Header({ closeEventSource }) {
+function Header() {
   const isMobile = window.innerWidth <= 768;
   const [open, setOpen] = useState(false);
   const { setUser } = useContext(AuthContext);

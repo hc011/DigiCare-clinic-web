@@ -52,25 +52,40 @@ export default function AddAppointmentMobile({ patients }) {
 
   const { cabinId, selectedSlot } = getCabinInfo(user);
 
-  const fetchSuggestedToken = () => {
-    if (patients.length > 0) {
+  const fetchSuggestedToken = async () => {
+    if (!cabinId || !selectedSlot) {
+      console.error("Cannot fetch token: missing cabinId or selectedSlot");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      const maxToken = await getMaxTokenNumber(cabinId, selectedSlot);
+      const nextToken = maxToken + 1;
+      console.log("Fetched maximum token from API:", maxToken, "Next token:", nextToken);
+      setSuggestedToken(nextToken);
+      setFormData((prev) => ({ ...prev, token: nextToken }));
+    } catch (error) {
+      console.error("Error fetching max token:", error);
+      // Fallback to calculating from patients if API fails
       try {
         let maxToken = 0;
-        maxToken =
-          patients.length > 0
-            ? Math.max(...patients.map((p) => p.appointment.token))
-            : 0;
+        maxToken = patients.length > 0
+          ? Math.max(...patients.map((p) => parseInt(p.appointment.token) || 0))
+          : 0;
         setSuggestedToken(maxToken + 1);
         setFormData((prev) => ({ ...prev, token: maxToken + 1 }));
-      } catch (error) {
-        console.error("Error fetching appointments:", error);
+      } catch (fallbackError) {
+        console.error("Fallback token calculation failed:", fallbackError);
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchSuggestedToken();
-  }, [patients]);
+  }, [cabinId, selectedSlot]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -157,10 +172,11 @@ export default function AddAppointmentMobile({ patients }) {
         fees_paid: 0,
       });
 
-      // Refresh token suggestion
-      fetchSuggestedToken();
+      // Refresh token suggestion after successfully adding
+      await fetchSuggestedToken();
+      
       setError("");
-      showSuccessSnackbar("Appointment added successfully!");
+      showSuccessSnackbar("Appointment added successfully!", 500 );
     } catch (error) {
       setError(error.response?.data?.message || "Failed to add appointment");
     } finally {

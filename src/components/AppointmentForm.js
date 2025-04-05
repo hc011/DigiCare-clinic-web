@@ -43,6 +43,13 @@ const AppointmentForm = () => {
   const [mobileSearchResults, setMobileSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const { showSuccessSnackbar, showErrorSnackbar } = useNotification();
+  // Create a ref for updateMaxToken to avoid dependency cycle
+  const updateMaxTokenRef = React.useRef(updateMaxToken);
+
+  // Keep the ref current
+  React.useEffect(() => {
+    updateMaxTokenRef.current = updateMaxToken;
+  }, [updateMaxToken]);
 
   const user = JSON.parse(localStorage.getItem("user"));
   const { cabinId, selectedSlot } = getCabinInfo(user);
@@ -56,7 +63,7 @@ const AppointmentForm = () => {
     checkin: false,
     paid: false,
     mode: "cash",
-    fees_paid: 0,
+    fees_paid: 250,
     status: "pending",
     disease: "",
     age: "",
@@ -99,34 +106,21 @@ const AppointmentForm = () => {
       
       const fetchMaxToken = async () => {
         try {
-          const cachedMaxToken = getMaxToken(cabinId, selectedSlot);
+          // Always get fresh token from API when form is opened
+          const maxToken = await getMaxTokenNumber(cabinId, selectedSlot);
+          console.log("Fetched maximum token from API:", maxToken);
           
-          if (cachedMaxToken !== undefined) {
-            console.log("Using cached maximum token:", cachedMaxToken);
-            
-            const nextToken = cachedMaxToken + 1;
-            
-            setNewAppointment(prev => ({
-              ...prev,
-              token: nextToken.toString()
-            }));
-            
-            setIsInitializing(false);
-          } else {
-            const maxToken = await getMaxTokenNumber(cabinId, selectedSlot);
-            console.log("Fetched maximum token from API:", maxToken);
-            
-            updateMaxToken(cabinId, selectedSlot, maxToken);
-            
-            const nextToken = maxToken + 1;
-            
-            setNewAppointment(prev => ({
-              ...prev,
-              token: nextToken.toString()
-            }));
-            
-            setIsInitializing(false);
-          }
+          // Update the cached value using ref to avoid dependency cycle
+          updateMaxTokenRef.current(cabinId, selectedSlot, maxToken);
+          
+          const nextToken = maxToken + 1;
+          
+          setNewAppointment(prev => ({
+            ...prev,
+            token: nextToken.toString()
+          }));
+          
+          setIsInitializing(false);
         } catch (error) {
           console.error("Error getting max token:", error);
           setError("Failed to initialize form. Please try again.");
@@ -136,7 +130,7 @@ const AppointmentForm = () => {
       
       fetchMaxToken();
     }
-  }, [isOpen, cabinId, selectedSlot, initialData, getMaxToken, updateMaxToken]);
+  }, [isOpen, cabinId, selectedSlot, initialData]); // Removed updateMaxToken from dependencies
 
   const resetForm = () => {
     setNewAppointment({
@@ -227,11 +221,16 @@ const AppointmentForm = () => {
 
   const handlePatientSelect = (patient) => {
     if (patient) {
+      // Split the name into first and last name for the form fields
+      const nameParts = patient.name.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
       setNewAppointment(prev => ({
         ...prev,
         phone_number: patient.phone_number,
-        firstName: patient.name.split(" ")[0] || "",
-        lastName: patient.name.split(" ").slice(1).join(" ") || "",
+        firstName: firstName,
+        lastName: lastName,
         age: patient.age || "",
         sex: patient.gender || "",
         location: patient.location || "",
@@ -248,43 +247,40 @@ const AppointmentForm = () => {
       const { cabinId, selectedSlot } = getCabinInfo(user);
       if (!cabinId || !selectedSlot) {
         showErrorSnackbar("Unable to retrieve cabin information");
-        setIsAdding(false);
         return;
       }
-      
-      console.log("Adding appointment with slot:", selectedSlot);
-      
-      const result = await addAppointment({
-        cabinId: cabinId,
+
+      await addAppointment({
+        cabinId,
         slot: selectedSlot,
-        name: `${newEntry.firstName} ${newEntry.lastName}`,
-        token: newEntry.token,
-        disease: newEntry.disease,
-        appointment_type: newEntry.appointment_type,
-        phone_number: newEntry.phone_number,
-        age: newEntry.age,
-        gender: newEntry.sex,
-        location: newEntry.location,
-        guardian: newEntry.guardian,
-        fees_paid: newEntry.fees_paid || 0,
-        mode: newEntry.mode,
-        paid: newEntry.paid,
-        checkin: newEntry.checkin
+        ...newEntry,
       });
-      
+
       showSuccessSnackbar("Appointment added successfully");
       
-      window.dispatchEvent(new CustomEvent('appointmentAdded', { 
-        detail: { appointment: result?.queue?.appointment } 
-      }));
-      
-      const newTokenValue = parseInt(newAppointment.token, 10);
-      updateMaxToken(cabinId, selectedSlot, newTokenValue);
+      // After successfully adding an appointment, refresh the max token
+      try {
+        const newMaxToken = await getMaxTokenNumber(cabinId, selectedSlot);
+        // Use ref to avoid dependency cycle
+        updateMaxTokenRef.current(cabinId, selectedSlot, newMaxToken);
+        console.log("Updated max token after adding appointment:", newMaxToken);
+      } catch (tokenError) {
+        console.error("Error refreshing max token after adding appointment:", tokenError);
+      }
       
       handleClose();
     } catch (error) {
       console.error("Error adding appointment:", error);
-      setError("Failed to add appointment: " + (error.message || "Unknown error"));
+      let errorMessage = "Failed to add appointment";
+      
+      if (error.response && error.response.data && error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
+      showErrorSnackbar(errorMessage);
     } finally {
       setIsAdding(false);
     }
@@ -323,8 +319,7 @@ const AppointmentForm = () => {
       id: parseInt(newAppointment.token),
       token: parseInt(newAppointment.token),
       appointment_id: newAppointment.appointment_id,
-      firstName: trimmedFirstName.toUpperCase(),
-      lastName: trimmedLastName.toUpperCase(),
+      name: `${trimmedFirstName} ${trimmedLastName}`.toUpperCase(),
       checkin: newAppointment.checkin,
       paid: newAppointment.paid,
       status: newAppointment.status,

@@ -19,15 +19,13 @@ import {
   Typography,
   Box,
 } from "@mui/material";
+import { markPatientAsDone, markPatientAsLate, shufflePatientPosition } from "../services/api";
 
 const QueueContainer = ({
   loading,
   patients,
   setPatients,
   currentPosition,
-  handleNextPatient,
-  handleLatePatient,
-  shufflePosition,
 }) => {
   const [mergedGroup, setMergedGroup] = useState([]);
   const [confirmDrag, setConfirmDrag] = useState(false);
@@ -46,7 +44,24 @@ const QueueContainer = ({
       .sort((a, b) => a.position - b.position);
 
     setMergedGroup(sortedPatients);
+    console.log('Sorted patients for queue:', sortedPatients);
+    console.log('Current position in queue:', currentPosition);
   }, [patients, currentPosition]);
+
+  const handleNextPatient = async (id) => {    
+    const result = await markPatientAsDone(id);
+    return result;
+  };
+
+  const handleLatePatient = async (id) => {
+    const result = await markPatientAsLate(id);
+    return result;
+  };
+
+  const shufflePosition = async (payload) => {
+    const result = await shufflePatientPosition(payload);
+    return result;
+  };
 
   const handleDragEnd = async (event) => {
     const { active, over } = event;

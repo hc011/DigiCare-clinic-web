@@ -1,10 +1,24 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Snackbar, Alert, Box, AlertTitle } from "@mui/material";
 import { useNotification } from "../context/NotificationContext";
 
 const GlobalSnackbar = () => {
   const { notification, hideNotification } = useNotification();
   const { open, message, severity, autoHideDuration, position, title } = notification;
+
+  useEffect(() => {
+    let timer;
+    if (open && autoHideDuration && autoHideDuration > 0) {
+      timer = setTimeout(() => {
+        hideNotification();
+      }, autoHideDuration);
+    }
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [open, autoHideDuration, hideNotification]);
 
   // Special case for full-screen success alert (SuccessAlert replacement)
   if (severity === "success" && title && position.vertical === "center" && position.horizontal === "center") {
@@ -40,23 +54,33 @@ const GlobalSnackbar = () => {
 
   // Regular snackbar (CustomSnackbar replacement)
   return (
-    <Snackbar
-      open={open}
-      autoHideDuration={autoHideDuration}
-      onClose={hideNotification}
-      anchorOrigin={position}
+    <Box 
+      sx={{ 
+        position: 'fixed',
+        zIndex: 1400,
+        [position.vertical]: 24,
+        [position.horizontal]: 24,
+        transition: 'all 0.3s ease'
+      }}
+      style={{ 
+        display: open ? 'block' : 'none',
+        opacity: open ? 1 : 0
+      }}
     >
       <Alert
         onClose={hideNotification}
         severity={severity}
         sx={{
           width: "100%",
+          minWidth: "288px",
           boxShadow: 3,
           alignItems: "center",
           ".MuiAlert-icon": {
             alignItems: "center",
           },
         }}
+        elevation={6}
+        variant="filled"
       >
         <span
           style={{ fontSize: "0.95rem", display: "flex", alignItems: "center" }}
@@ -64,7 +88,7 @@ const GlobalSnackbar = () => {
           {message}
         </span>
       </Alert>
-    </Snackbar>
+    </Box>
   );
 };
 

@@ -60,14 +60,23 @@ const PatientItem = ({
   const [confirmAction, setConfirmAction] = useState(null);
   const [loadingType, setLoadingType] = useState(null);
 
+  // Remove debugger statement and add more useful debugging
+  
+
   // Determine if this is the current patient based on position
-  const isCurrent = position === currentPosition;
+  // Force evaluate as numbers to ensure proper comparison
+  let isCurrent = parseInt(position) === parseInt(currentPosition);
   const isLate = late;
   const isDone = status === "done_checkup" || status === "done";
   const isCancelled = status === "cancelled";
   const isPending = status === "pending";
   console.log("late", late);
   const user = JSON.parse(localStorage.getItem('user'));
+
+  useEffect(() => {
+    isCurrent = parseInt(position) === parseInt(currentPosition);
+    console.log(`PatientItem ${position} - Current position: ${currentPosition}, isCurrent: ${position === currentPosition}`);
+  }, [position, currentPosition]);
 
   // Log the data structure for debugging
   useEffect(() => {
@@ -81,6 +90,48 @@ const PatientItem = ({
       status
     });
   }, [position, appointment, late, currentPosition, paid, checkin, status]);
+
+  // Add additional useEffect to detect changes in late status
+  useEffect(() => {
+    console.log(`Patient ${position} (${appointment.name}) - Late status update:`, late);
+    // Force DOM update for mobile view when late status changes
+    if (window.innerWidth <= 768 && !document.hidden) {
+      // Add a data attribute to track late status directly on the DOM
+      const patientItem = document.querySelector(`.patient-item[data-appointment-id="${appointment.appointment_id}"]`);
+      if (patientItem) {
+        patientItem.dataset.late = late ? "true" : "false";
+        
+        // Update class to ensure CSS styling
+        if (late) {
+          patientItem.classList.add("late");
+        } else {
+          patientItem.classList.remove("late");
+        }
+        
+        // Find the status tags container and ensure late chip exists if needed
+        const statusTags = patientItem.querySelector('.status-tags');
+        if (statusTags) {
+          const existingLateChip = statusTags.querySelector('.late-chip');
+          
+          if (late && !existingLateChip) {
+            // If we should have a late chip but don't, try to force render it
+            const lateChipContainer = document.createElement('div');
+            lateChipContainer.className = 'late-chip-container';
+            lateChipContainer.innerHTML = `
+              <span class="late-chip MuiChip-root MuiChip-outlined MuiChip-sizeSmall MuiChip-colorError">
+                <span class="MuiChip-icon"><span class="material-icons MuiIcon-root MuiIcon-fontSizeSmall">access_time</span></span>
+                <span class="MuiChip-label">Late</span>
+              </span>
+            `;
+            statusTags.appendChild(lateChipContainer);
+          } else if (!late && existingLateChip) {
+            // Remove late chip if it shouldn't be there
+            existingLateChip.remove();
+          }
+        }
+      }
+    }
+  }, [late, position, appointment.appointment_id]);
 
   const {
     attributes,
@@ -174,15 +225,17 @@ const PatientItem = ({
           cursor: 'pointer',
           WebkitTapHighlightColor: 'rgba(0,0,0,0)', // Remove default tap highlight on mobile
         }}
-        className={`patient-item ${isCurrent ? "current" : ""} ${isLate ? "late" : ""} ${
+        className={`patient-item ${isCurrent ? "current" : ""} ${late ? "late" : ""} ${
           isDone ? "done" : ""
         } ${isCancelled ? "cancelled" : ""} ${isPending ? "pending" : ""}`}
         onClick={handlePatientClick} // Add the click handler
         data-paid={paid ? "true" : "false"}
         data-present={checkin ? "true" : "false"}
+        data-late={late ? "true" : "false"}
+        data-appointment-id={appointment.appointment_id}
     >
       <div className="patient-content">
-          <div className={`token-badge ${isCurrent ? "current-token" : ""} ${isLate ? "late-token" : ""} ${status === "cancelled" ? "cancelled-token" : ""}`}>
+          <div className={`token-badge ${isCurrent ? "current-token" : ""} ${late ? "late-token" : ""} ${status === "cancelled" ? "cancelled-token" : ""}`}>
             <span>#{position === -1 ? appointment.token : (appointment.token || position)}</span>
           </div>
 
@@ -231,13 +284,14 @@ const PatientItem = ({
                   />
                 )}
                 
-                {isLate && (
+                {late && (
                   <Chip
                     icon={<AccessTime fontSize="small" />}
                     label="Late"
                     size="small"
                     color="error"
                     variant="outlined"
+                    className="late-chip"
                     sx={{ fontWeight: 'bold' }}
                   />
                 )}

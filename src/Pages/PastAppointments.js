@@ -615,7 +615,7 @@ export default function PastAppointments() {
       }}
     >
       <DialogTitle sx={{ position: "relative", pr: 6, p: 0, mb: 2 }}>
-        <Typography variant="h5">Edit Appointment</Typography>
+        <Typography component="div" variant="h5">Edit Appointment</Typography>
         <IconButton
           aria-label="close"
           onClick={handleEditModalClose}
@@ -1048,7 +1048,11 @@ export default function PastAppointments() {
                 ));
                 handleDateChange(utcDate);
               }}
-              maxDate={new Date()}
+              maxDate={(() => {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                return yesterday;
+              })()}
               slotProps={{ 
                 textField: { 
                   size: 'small', 

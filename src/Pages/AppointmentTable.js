@@ -1,5 +1,4 @@
-import * as React from "react";
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import "./AppointmentTable.css";
 import { DataGrid, GridToolbar, GridToolbarContainer, GridToolbarQuickFilter } from "@mui/x-data-grid";
 import {
@@ -34,17 +33,17 @@ import EditIcon from "@mui/icons-material/Edit";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
 import {
-  fetchAppointments,
   addAppointment,
   updateAppointmentDetails,
   removeAppointment,
   getPatientProfile,
-  createSlot
+  createSlot,
+  fetchAppointments
 } from "../services/api";
 import { useNotification } from "../context/NotificationContext";
-import { getCabinInfo } from '../utils/dateUtils';
+import { getCabinInfoFromUser } from '../utils/dateUtils';
 import { useNavigate, useLocation } from "react-router-dom";
-import { EventSource } from "eventsource";
+import webSocketService from "../services/websocketService";
 import { useAppointmentForm } from "../context/AppointmentFormContext";
 
 const modalStyle = {
@@ -132,11 +131,11 @@ function CustomToolbar(props) {
 
 export default function AppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfo(user);
+  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
   const [currentCabinSlot, setCurrentCabinSlot] = useState(null);
 
-  const [rows, setRows] = React.useState([]);
-  const [loading, setLoading] = React.useState(false);
+  const [appointments, setAppointments] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -165,46 +164,46 @@ export default function AppointmentTable() {
 
   const totalCollection = React.useMemo(
     () =>
-      rows
+      appointments
         .reduce((sum, row) => sum + (row.fees_paid || 0), 0),
-    [rows]
+    [appointments]
   );
 
   const [totalPatients, setTotalPatients] = useState(0);
 
   const totalCheckedIn = React.useMemo(
-    () => rows.filter((row) => row.checkin && !row.isPlaceholder).length,
-    [rows]
+    () => appointments.filter((row) => row.checkin && !row.isPlaceholder).length,
+    [appointments]
   );
 
   const totalPending = React.useMemo(
     () =>
-      rows.filter((row) => row.status === "pending" && !row.isPlaceholder)
+      appointments.filter((row) => row.status === "pending" && !row.isPlaceholder)
         .length,
-    [rows]
+    [appointments]
   );
 
   const totalCompleted = React.useMemo(
     () =>
-      rows.filter((row) => row.status === "done_checkup" && !row.isPlaceholder)
+      appointments.filter((row) => row.status === "done_checkup" && !row.isPlaceholder)
         .length,
-    [rows]
+    [appointments]
   );
 
   const cashTotal = React.useMemo(
     () =>
-      rows
+      appointments
         .filter((row) => row.paid && row.mode === "cash")
         .reduce((sum, row) => sum + (row.fees_paid || 0), 0),
-    [rows]
+    [appointments]
   );
 
   const onlineTotal = React.useMemo(
     () =>
-      rows
+      appointments
         .filter((row) => row.paid && row.mode === "online")
         .reduce((sum, row) => sum + (row.fees_paid || 0), 0),
-    [rows]
+    [appointments]
   );
 
   const genderOptions = [
@@ -241,84 +240,105 @@ export default function AppointmentTable() {
   const [selectedAppointment, setSelectedAppointment] = React.useState(null);
   const [editMobileSearchResults, setEditMobileSearchResults] = useState([]);
   const [isEditSearching, setIsEditSearching] = useState(false);
-
-  const displayedRows = React.useMemo(() => generateDisplayRows(rows), [rows]);
-
+  
+  const [rows, setRows] = useState([]);
+  
   const navigate = useNavigate();
-
-  const [eventSource, setEventSource] = useState(null);
-
+  
   const [endSlotModalOpen, setEndSlotModalOpen] = useState(false);
   const [newSlotData, setNewSlotData] = useState({
     datetime: ''
   });
   const [isCreatingSlot, setIsCreatingSlot] = useState(false);
-
-  useEffect(() => {
-    // Fetch appointments data on component mount
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user) return;
-
-    const { cabinId, selectedSlot } = getCabinInfo(user);
+  
+  const getAppointments = async () => {
     if (!cabinId || !selectedSlot) return;
     
-    // Fetch appointments on component mount
-    getAppointments();
-  }, []); // Empty dependency array to run only on mount
-
-  // Add SSE for real-time appointment updates
-  useEffect(() => {
-    if (!user) return;
+    console.log(`Fetching appointments for cabin ${cabinId} and slot ${selectedSlot}`);
+    setLoading(true);
     
-    // Create formatted date for the SSE URL
-    const date = new Date(selectedSlot);
-    const formattedDate = date
-      .toISOString()
-      .replace(".000", "")
-      .replace("T", " ")
-      .replace("Z", "+00:00");
-    const encodedDate = encodeURIComponent(formattedDate);
-    const sseUrl = `${API_BASE_URL}/doctorinfo/queue_updates/${cabinId}/${formattedDate}`;
-
-    // Close existing connection if any
-    if (eventSource) {
-      eventSource.close();
+    try {
+      const fetchedAppointments = await fetchAppointments(cabinId, selectedSlot);
+      console.log(`Fetched ${fetchedAppointments.length} appointments`);
+      const formattedAppointments = fetchedAppointments.map(apt => {
+        return {
+          ...apt,
+          id: apt.appointment_id || apt.token || Math.random().toString(36).substr(2, 9)
+        };
+      });
+      setAppointments(formattedAppointments);
+    } catch (error) {
+      console.error("Error fetching appointments:", error);
+      showErrorSnackbar(
+        "Failed to fetch appointments. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Create new connection
-    const newEventSource = new EventSource(sseUrl, { withCredentials: true });
-    setEventSource(newEventSource);
+  useEffect(() => {
+    if (cabinId && selectedSlot && !loading) {
+      getAppointments();
+    }
+  }, [cabinId, selectedSlot]);
 
-    newEventSource.onmessage = async (event) => {
+  // Setup WebSocket subscription for real-time updates
+  useEffect(() => {
+    if (!cabinId || !selectedSlot) return;
+
+    console.log("Setting up WebSocket subscription for appointments");
+    
+    // Subscribe to appointment updates
+    const unsubscribe = webSocketService.subscribe('appointment', (response) => {
+      console.log("Received appointment update via WebSocket:", response);
+      
       try {
-        const data = JSON.parse(event.data);
-        if (data.appointment) {
+        // Check for the right message format
+        let appointmentData = null;
+        
+        if (response.data && response.data.type === "appointment_update" && response.data.data && response.data.data.appointment) {
+          appointmentData = response.data.data.appointment;
+        } else if (response.data && response.data.type === "queue_update" && response.data.data && response.data.data.appointment) {
+          appointmentData = response.data.data.appointment;
+        } else if (response.appointment) {
+          appointmentData = response.appointment;
+        }
+        
+        if (appointmentData) {
+          console.log("Processing appointment update:", appointmentData);
+          
+          // Update rows state
           setRows((prevRows) => {
             // Handle null patient data safely
-            const patientData = data.appointment.patient || {};
+            const patientData = appointmentData.patient || {};
+            
+            // Check if name exists before splitting
+            const name = appointmentData.patient_name || appointmentData.name || '';
+            const nameParts = name.split(' ');
+            
             const formattedAppointment = {
-              id: data.appointment.token,
-              token: data.appointment.token,
-              appointment_id: data.appointment.appointment_id,
-              firstName: data.appointment.name.split(" ")[0] || "",
-              lastName:
-                data.appointment.name.split(" ").slice(1).join(" ") || "",
-              checkin: data.appointment.checkin,
-              paid: data.appointment.paid,
-              status: data.appointment.status,
-              disease: data.appointment.disease || "",
+              id: appointmentData.appointment_id || appointmentData.token || Math.random().toString(36).substr(2, 9),
+              token: appointmentData.token || "",
+              appointment_id: appointmentData.appointment_id,
+              firstName: nameParts[0] || "",
+              lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
+              checkin: appointmentData.checkin || false,
+              paid: appointmentData.paid || false,
+              status: appointmentData.status || "pending",
+              disease: appointmentData.disease || "",
               age: patientData.age || "",
               phone_number: patientData.phone_number || "",
               location: patientData.location || "",
               sex: patientData.gender || "",
               guardian: patientData.guardian || "",
-              appointment_type: data.appointment.appointment_type,
-              mode: data.appointment.mode || "",
-              fees_paid: data.appointment.fees_paid || 0,
+              appointment_type: appointmentData.appointment_type || "New",
+              mode: appointmentData.mode || "",
+              fees_paid: appointmentData.fees_paid || 0,
             };
 
             const existingIndex = prevRows.findIndex(
-              (r) => r.appointment_id === data.appointment.appointment_id
+              (r) => r.appointment_id === appointmentData.appointment_id
             );
 
             if (existingIndex !== -1) {
@@ -328,174 +348,79 @@ export default function AppointmentTable() {
             }
 
             return [...prevRows, formattedAppointment].sort(
-              (a, b) => a.token - b.token
+              (a, b) => (a.token || 0) - (b.token || 0)
             );
+          });
+          
+          // Also update the appointments state
+          setAppointments(prevAppointments => {
+            const existingIndex = prevAppointments.findIndex(
+              a => a.appointment_id === appointmentData.appointment_id
+            );
+            
+            if (existingIndex !== -1) {
+              const newAppointments = [...prevAppointments];
+              newAppointments[existingIndex] = {
+                ...newAppointments[existingIndex],
+                ...appointmentData
+              };
+              return newAppointments;
+            }
+            
+            return [...prevAppointments, appointmentData];
           });
         }
       } catch (error) {
-        // console.error("Error processing appointment update:", error);
+        console.error("Error processing WebSocket appointment data:", error);
       }
-    };
+    });
 
-    // Clean up function
     return () => {
-      if (newEventSource) {
-        newEventSource.close();
-        console.log("SSE connection closed");
-      }
+      unsubscribe();
     };
-  }, []); // Empty dependency array means this runs once when component mounts
+  }, [cabinId, selectedSlot]);
 
-  // Add a new effect to handle focus/visibility changes
   useEffect(() => {
-    // Function to handle when the page becomes visible again
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('Tab is now visible, checking SSE connection state in AppointmentTable');
+    if (appointments && appointments.length > 0) {
+      const mappedRows = appointments.map(appointment => {
+        const patientName = appointment.patient_name || appointment.name || '';
+        const nameParts = patientName.split(' ');
         
-        // Check if we already have an active connection
-        if (!eventSource || eventSource.readyState === EventSource.CLOSED) {
-          console.log('Creating new SSE connection in AppointmentTable');
-          
-          // Create formatted date for the SSE URL
-          const date = new Date(selectedSlot);
-          const formattedDate = date
-            .toISOString()
-            .replace(".000", "")
-            .replace("T", " ")
-            .replace("Z", "+00:00");
-          const encodedDate = encodeURIComponent(formattedDate);
-          const sseUrl = `${API_BASE_URL}/doctorinfo/queue_updates/${cabinId}/${formattedDate}`;
-          
-          // Close existing connection if any
-          if (eventSource) {
-            eventSource.close();
-          }
-          
-          // Create new connection
-          const newEventSource = new EventSource(sseUrl, { withCredentials: true });
-          setEventSource(newEventSource);
-          
-          newEventSource.onmessage = async (event) => {
-            try {
-              const data = JSON.parse(event.data);
-              if (data.appointment) {
-                setRows((prevRows) => {
-                  // Handle null patient data safely
-                  const patientData = data.appointment.patient || {};
-                  const formattedAppointment = {
-                    id: data.appointment.token,
-                    token: data.appointment.token,
-                    appointment_id: data.appointment.appointment_id,
-                    firstName: data.appointment.name.split(" ")[0] || "",
-                    lastName: data.appointment.name.split(" ").slice(1).join(" ") || "",
-                    checkin: data.appointment.checkin,
-                    paid: data.appointment.paid,
-                    status: data.appointment.status,
-                    disease: data.appointment.disease || "",
-                    age: patientData.age || "",
-                    phone_number: patientData.phone_number || "",
-                    location: patientData.location || "",
-                    sex: patientData.gender || "",
-                    guardian: patientData.guardian || "",
-                    appointment_type: data.appointment.appointment_type,
-                    mode: data.appointment.mode || "",
-                    fees_paid: data.appointment.fees_paid || 0,
-                  };
-
-                  const existingIndex = prevRows.findIndex(
-                    (r) => r.appointment_id === data.appointment.appointment_id
-                  );
-
-                  if (existingIndex !== -1) {
-                    const newRows = [...prevRows];
-                    newRows[existingIndex] = formattedAppointment;
-                    return newRows;
-                  }
-
-                  return [...prevRows, formattedAppointment].sort(
-                    (a, b) => a.token - b.token
-                  );
-                });
-              }
-            } catch (error) {
-              // console.error("Error processing appointment update:", error);
-            }
-          };
-        }
-      }
-    };
-
-    // Listen for visibility change events
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Clean up event listener on unmount
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [cabinId, selectedSlot, eventSource]);
-
-  const getAppointments = async () => {
-    setLoading(true);
-    try {
+        return {
+          id: appointment.appointment_id || appointment.token,
+          token: appointment.token || "",
+          appointment_id: appointment.appointment_id,
+          firstName: nameParts[0] || "",
+          lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
+          checkin: appointment.checkin || false,
+          paid: appointment.paid || false,
+          mode: appointment.payment_mode || appointment.mode || '-',
+          fees_paid: appointment.fees_paid || 0,
+          status: appointment.status || "pending",
+          disease: appointment.disease || "",
+          age: appointment.age || (appointment.patient?.age) || "",
+          phone_number: appointment.phone_number || (appointment.patient?.phone_number) || "",
+          location: appointment.location || (appointment.patient?.location) || "",
+          sex: appointment.sex || (appointment.patient?.gender) || "",
+          guardian: appointment.guardian_name || (appointment.patient?.guardian) || "",
+          appointment_type: appointment.appointment_type ,
+          isPlaceholder: false,
+        };
+      });
       
-      const data = await fetchAppointments(cabinId, selectedSlot);
-      
-      if (data && data.length !== 0) {
-        console.log("Received data:", data); // Debug log
-        
-        const formattedData = data.map((item) => {
-          // Handle different data structures
-          const name = item.name || '';
-          const [firstName, ...lastNameParts] = name.split(" ");
-          
-          // Create a consistent data structure
-          return {
-            id: item.token, // Use token as id for DataGrid
-            token: item.token,
-            appointment_id: item.appointment_id,
-            firstName: firstName || "",
-            lastName: lastNameParts.join(" ") || "",
-            checkin: item.checkin, // Randomize for demo
-            paid: item.paid, // Randomize for demo
-            status: item.status,
-            disease: item.disease || "",
-            age: item.patient ? item.patient.age : "",
-            phone_number: item.patient ? item.patient.phone_number : "",
-            location: item.patient ? item.patient.location : "",
-            sex: item.patient?.gender || "",
-            guardian: item.patient ? item.patient.guardian : "",
-            appointment_type: item.appointment_type 
-              ? item.appointment_type.charAt(0).toUpperCase() + item.appointment_type.slice(1).toLowerCase()
-              : "",
-            mode: item.mode || "",
-            fees_paid: item.fees_paid || 0,
-            date: item.date || new Date().toISOString().split('T')[0],
-            isPlaceholder: false,
-            patientId: item.patient_id // Preserve patient ID
-          };
-        });
-        
-        console.log("Formatted data:", formattedData); // Debug log
-        setRows(formattedData.sort((a, b) => a.token - b.token));
-      } else {
-        console.log("No data received or empty data array"); // Debug log
-        setRows([]);
-      }
-    } catch (error) {
-      console.error("Error fetching appointments:", error);
+      console.log("Mapped rows:", mappedRows);
+      setRows(mappedRows);
+      setTotalPatients(mappedRows.length);
+    } else {
       setRows([]);
-    } finally {
-      setLoading(false);
+      setTotalPatients(0);
     }
-  };
+  }, [appointments]);
 
   const handleOpen = () => {
-    // Set token number to max token + 1
-    const maxToken = rows.length > 0 ? Math.max(...rows.map((r) => r.token)) : 0;
+    const maxToken = appointments.length > 0 ? Math.max(...appointments.map((r) => r.token)) : 0;
     const nextToken = maxToken + 1;
     
-    // Set the token directly in the form
     setNewAppointment(prev => ({
       ...prev,
       token: nextToken.toString()
@@ -681,7 +606,7 @@ export default function AppointmentTable() {
             size="small"
             startIcon={<VisibilityIcon />}
             onClick={(e) => {
-              e.stopPropagation(); // Prevent row click from triggering
+              e.stopPropagation();
               handleAppointmentClick(params.row);
             }}
             sx={{ fontSize: '0.75rem', py: 0.5 }}
@@ -695,7 +620,6 @@ export default function AppointmentTable() {
   const handleRowClick = (params) => {
     if (params.row.isPlaceholder) return;
     
-    // Create a clean copy of the row data with default values for null/undefined fields
     const appointmentData = {
       ...params.row,
       firstName: params.row.firstName || "",
@@ -714,7 +638,6 @@ export default function AppointmentTable() {
     setSelectedAppointment(appointmentData);
     setEditModalOpen(true);
     
-    // Clear any previous search results
     setEditMobileSearchResults([]);
   };
 
@@ -740,7 +663,7 @@ export default function AppointmentTable() {
   };
 
   const validateToken = (token) => {
-    return !rows.some((row) => row.token === parseInt(token));
+    return !appointments.some((row) => row.token === parseInt(token));
   };
 
   const AddAppointmentApi = async (newEntry) => {
@@ -750,7 +673,7 @@ export default function AppointmentTable() {
       const result = await addAppointment({
         cabinId: cabinId,
         slot: selectedSlot,
-        name: `${newEntry.firstName} ${newEntry.lastName}`,
+        name: newEntry.name,
         token: newEntry.token,
         disease: newEntry.disease,
         appointment_type: newEntry.appointment_type,
@@ -765,45 +688,37 @@ export default function AppointmentTable() {
         checkin: newEntry.checkin
       });
       
-      // if (result.appointment_id) {
-        // Format the new appointment to match our table format
-        const newAppointment = {
-          id: result?.queue?.appointment?.token ,
-          token: result?.queue?.appointment?.token ,
-          appointment_id: result?.queue?.appointment?.appointment_id || "",
-          firstName: result?.queue?.appointment?.name?.split(" ")[0] || "",
-          lastName: result?.queue?.appointment?.name?.split(" ")[1] || "",
-          checkin: result?.queue?.checkin || false,
-          paid: result?.queue?.paid || false,
-          status: result?.queue?.status || "",
-          disease: result?.queue?.appointment?.disease || "",
-          age: newEntry.age,
-          phone_number: newEntry.phone_number,
-          location: newEntry.location,
-          sex: newEntry.sex,
-          guardian: newEntry.guardian,
-          appointment_type: result?.queue?.appointment?.appointment_type || "",
-          mode: result?.queue?.appointment?.mode,
-          fees_paid: result?.queue?.appointment?.fees_paid || 0,
-        };
+      const newAppointment = {
+        id: result?.queue?.appointment?.token ,
+        token: result?.queue?.appointment?.token ,
+        appointment_id: result?.queue?.appointment?.appointment_id || "",
+        firstName: result?.queue?.appointment?.name?.split(" ")[0] || "",
+        lastName: result?.queue?.appointment?.name?.split(" ").slice(1).join(" ") || "",
+        checkin: result?.queue?.checkin || false,
+        paid: result?.queue?.paid || false,
+        status: result?.queue?.status || "",
+        disease: result?.queue?.appointment?.disease || "",
+        age: newEntry.age,
+        phone_number: newEntry.phone_number,
+        location: newEntry.location,
+        sex: newEntry.sex,
+        guardian: newEntry.guardian,
+        appointment_type: result?.queue?.appointment?.appointment_type || "",
+        mode: result?.queue?.appointment?.mode,
+        fees_paid: result?.queue?.appointment?.fees_paid || 0,
+      };
+      
+      setAppointments((prev) => [...prev, newAppointment].sort((a, b) => a.token - b.token));
+      
+      if (newEntry.phone_number) {
+        showSuccessSnackbar("Appointment added successfully and patient profile created with past prescriptions. Patient added to queue with token " + newEntry.token);
         
-        // Add to rows
-        setRows((prev) => [...prev, newAppointment].sort((a, b) => a.token - b.token));
-        
-        // Show appropriate success message
-        if (newEntry.phone_number) {
-          showSuccessSnackbar("Appointment added successfully and patient profile created with past prescriptions. Patient added to queue with token " + newEntry.token);
-          
-
-          window.dispatchEvent(new CustomEvent('refreshQueue'));
-        } else {
-          showSuccessSnackbar("Appointment added successfully");
-        }
-        
-        handleClose();
-      // } else {
-        // setError("Failed to add appointment");
-      // }
+        window.dispatchEvent(new CustomEvent('refreshQueue'));
+      } else {
+        showSuccessSnackbar("Appointment added successfully");
+      }
+      
+      handleClose();
     } catch (error) {
       console.error("Error adding appointment:", error);
       setError("Failed to add appointment");
@@ -856,8 +771,7 @@ export default function AppointmentTable() {
       id: parseInt(newAppointment.token),
       token: parseInt(newAppointment.token),
       appointment_id: newAppointment.appointment_id,
-      firstName: trimmedFirstName.toUpperCase(),
-      lastName: trimmedLastName.toUpperCase(),
+      name: `${trimmedFirstName} ${trimmedLastName}`.toUpperCase(),
       checkin: newAppointment.checkin,
       paid: newAppointment.paid,
       status: newAppointment.status,
@@ -878,7 +792,6 @@ export default function AppointmentTable() {
   const handleConfirmEdit = async () => {
     if (!selectedAppointment) return;
     
-    // Prepare data for update
     const updateData = {
       token: selectedAppointment.token,
       appointment_id: selectedAppointment.appointment_id,
@@ -957,12 +870,10 @@ export default function AppointmentTable() {
     return "data-row";
   };
 
-  // Function to format date and time from appointment_id
   const formatAppointmentDateTime = (appointmentId) => {
     try {
-      // The format appears to be: "7049822025-03-07 17:22:35.039546"
-      const dateTimePart = appointmentId.split('-').slice(1).join('-'); // "03-07 17:22:35.039546"
-      const dateTime = new Date(`2025-${dateTimePart}`); // Add 2025 as the API data uses 2025 year
+      const dateTimePart = appointmentId.split('-').slice(1).join('-');
+      const dateTime = new Date(`2025-${dateTimePart}`);
       
       return {
         date: dateTime.toLocaleDateString('en-US', { 
@@ -981,23 +892,17 @@ export default function AppointmentTable() {
     }
   };
 
-  // Function to handle click on an appointment
   const handleAppointmentClick = (appointment) => {
-    // Extract date and time from appointment_id for backward compatibility
     const { date, time } = formatAppointmentDateTime(appointment.appointment_id);
     
-    // Log the appointment data for debugging
     console.log("Appointment clicked:", appointment);
     
-    // Pass only the minimal information needed - primarily IDs
-    // The rest will be fetched from the API in the AppointmentDetails component
     const appointmentInfo = {
       id: appointment.appointment_id,
       status: mapStatusToReadable(appointment.status),
       patientId: appointment.patientId || undefined
     };
     
-    // Always include 'from' field to ensure AppointmentDetails knows where the navigation is coming from
     navigate('/appointment-details', { 
       state: { 
         appointmentInfo,
@@ -1007,7 +912,6 @@ export default function AppointmentTable() {
     });
   };
   
-  // Helper function to map API status to human-readable status
   const mapStatusToReadable = (status) => {
     switch(status) {
       case 'pending': return 'Pending';
@@ -1018,7 +922,6 @@ export default function AppointmentTable() {
     }
   };
 
-  // Add the renderEditModal function that was removed
   const renderEditModal = () => (
     <Dialog
       open={editModalOpen}
@@ -1035,7 +938,7 @@ export default function AppointmentTable() {
       }}
     >
       <DialogTitle sx={{ position: "relative", pr: 6, p: 0, mb: 2 }}>
-        <Typography variant="h5">Edit Appointment</Typography>
+        <Typography component="div" variant="h5">Edit Appointment</Typography>
         <IconButton
           aria-label="close"
           onClick={handleEditModalClose}
@@ -1071,7 +974,6 @@ export default function AppointmentTable() {
               fullWidth
               options={editMobileSearchResults}
               getOptionLabel={(option) => {
-                // Handle both objects from dropdown and direct string input
                 return typeof option === 'object' ? option?.phone_number || "" : option || "";
               }}
               loading={isEditSearching}
@@ -1372,11 +1274,16 @@ export default function AppointmentTable() {
 
   const handlePatientSelect = (patient) => {
     if (patient) {
+      // Split the name into first and last name for the form fields
+      const nameParts = patient.name.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
       setNewAppointment(prev => ({
         ...prev,
         phone_number: patient.phone_number,
-        firstName: patient.name.split(" ")[0] || "",
-        lastName: patient.name.split(" ").slice(1).join(" ") || "",
+        firstName: firstName,
+        lastName: lastName,
         age: patient.age || "",
         sex: patient.gender || "",
         location: patient.location || "",
@@ -1410,11 +1317,16 @@ export default function AppointmentTable() {
 
   const handleEditPatientSelect = (patient) => {
     if (patient) {
+      // Split the name into first and last name for the form fields
+      const nameParts = patient.name.split(" ");
+      const firstName = nameParts[0] || "";
+      const lastName = nameParts.slice(1).join(" ") || "";
+      
       setSelectedAppointment(prev => ({
         ...prev,
         phone_number: patient.phone_number,
-        firstName: patient.name.split(" ")[0] || "",
-        lastName: patient.name.split(" ").slice(1).join(" ") || "",
+        firstName: firstName,
+        lastName: lastName,
         age: patient.age || "",
         sex: patient.gender || "",
         location: patient.location || "",
@@ -1443,7 +1355,6 @@ export default function AppointmentTable() {
     try {
       setIsCreatingSlot(true);
       
-      // Format the datetime string to get date and time separately
       const datetime = new Date(newSlotData.datetime);
       const date = datetime.toISOString().split('T')[0];
       const time = datetime.toTimeString().split(' ')[0];
@@ -1453,15 +1364,12 @@ export default function AppointmentTable() {
         time: time
       });
       
-      // Update the user's cabin slots in localStorage
       const user = JSON.parse(localStorage.getItem("user"));
       if (user) {
-        // Initialize cabin_slots if it doesn't exist
         if (!user.checkupcabindata?.[0]?.cabin_slots) {
           user.checkupcabindata[0].cabin_slots = [];
         }
         
-        // Add the new slot if it doesn't exist
         const newSlot = response.slot;
         if (!user.checkupcabindata?.[0]?.cabin_slots.find(slot => slot.slot === newSlot)) {
           user.checkupcabindata[0].cabin_slots.push({
@@ -1470,7 +1378,6 @@ export default function AppointmentTable() {
           });
         }
         
-        // Update active status for all slots
         user.checkupcabindata[0].cabin_slots = user.checkupcabindata[0].cabin_slots.map(slot => ({
           ...slot,
           is_active: slot.slot === response.slot
@@ -1482,7 +1389,6 @@ export default function AppointmentTable() {
       showSuccessSnackbar("Slot ended successfully and new slot created");
       handleEndSlotClose();
       
-      // Refresh the page to reflect the new slot
       window.location.reload();
     } catch (error) {
       console.error("Error ending slot:", error);
@@ -1492,7 +1398,6 @@ export default function AppointmentTable() {
     }
   };
 
-  // Add the end slot modal component
   const renderEndSlotModal = () => (
     <Modal
       open={endSlotModalOpen}
@@ -1516,7 +1421,7 @@ export default function AppointmentTable() {
           InputLabelProps={{ shrink: true }}
           sx={{ mb: 3 }}
           inputProps={{
-            min: new Date().toISOString().slice(0, 16)  // Set min to current datetime
+            min: new Date().toISOString().slice(0, 16)
           }}
         />
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
@@ -1532,6 +1437,9 @@ export default function AppointmentTable() {
       </Box>
     </Modal>
   );
+
+  // Calculate displayedRows based on rows after rows is defined
+  const displayedRows = React.useMemo(() => generateDisplayRows(rows), [rows]);
 
   return (
     <div
@@ -1580,7 +1488,6 @@ export default function AppointmentTable() {
             flexWrap: "wrap",
           }}
         >
-          {/* Payment Breakdown */}
           <Box>
             <Typography variant="subtitle2" color="textSecondary" gutterBottom>
               Payment Breakdown
@@ -1592,7 +1499,6 @@ export default function AppointmentTable() {
             <Typography variant="body1">Online: ₹{onlineTotal}</Typography>
           </Box>
 
-          {/* Appointment Statistics */}
           <Box>
             <Typography variant="subtitle2" color="textSecondary" gutterBottom>
               Appointment Statistics
@@ -1607,26 +1513,25 @@ export default function AppointmentTable() {
             <Typography variant="body1">Completed: {totalCompleted}</Typography>
           </Box>
 
-          {/* Additional Metrics (Optional) */}
           <Box>
             <Typography variant="subtitle2" color="textSecondary" gutterBottom>
               Additional Metrics
             </Typography>
             <Typography variant="body1">
               New Appointments:{" "}
-              {rows.filter((row) => row.appointment_type === "New").length}
+              {appointments.filter((row) => row.appointment_type === "New").length}
             </Typography>
             <Typography variant="body1">
               Follow-ups:{" "}
               {
-                rows.filter((row) => row.appointment_type === "Follow-up")
+                appointments.filter((row) => row.appointment_type === "Follow-up")
                   .length
               }
             </Typography>
             <Typography variant="body1">
               Emergencies:{" "}
               {
-                rows.filter((row) => row.appointment_type === "Emergency")
+                appointments.filter((row) => row.appointment_type === "Emergency")
                   .length
               }
             </Typography>
@@ -1659,6 +1564,9 @@ export default function AppointmentTable() {
               handleRowClick(params);
             }
           }}
+          components={{
+            NoRowsOverlay: CustomNoRowsOverlay,
+          }}
           sx={{
             "& .MuiDataGrid-columnHeaders": {
               backgroundColor: "#f5f5f5",
@@ -1681,7 +1589,7 @@ export default function AppointmentTable() {
               maxWidth: "100% !important",
             },
           }}
-          // density="compact"
+          getRowId={(row) => row.appointment_id || row.token || Math.random().toString(36).substr(2, 9)}
         />
       </div>
 
@@ -1768,7 +1676,6 @@ export default function AppointmentTable() {
               fullWidth
               options={mobileSearchResults}
               getOptionLabel={(option) => {
-                // Handle both objects from dropdown and direct string input
                 return typeof option === 'object' ? option?.phone_number || "" : option || "";
               }}
               loading={isSearching}
@@ -1989,7 +1896,6 @@ export default function AppointmentTable() {
         </Box>
       </Modal>
 
-      {/* Floating action button for mobile */}
       <IconButton
         aria-label="add appointment"
         onClick={() => openAppointmentForm()}

@@ -35,20 +35,24 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
   // Update local state when props change
   useEffect(() => {
     if (patientsData) {
+      console.log("MobileQueuePage received updated patients data:", patientsData);
       setPatients(patientsData);
       
       // Mark data as loaded regardless of whether there are patients or not
       setDataLoaded(true);
       setLocalLoading(false);
+      
+      // Apply the mobile fix after React has had time to render the updated data
+      // Use a slightly longer timeout to ensure React has completed rendering
+      if (patientsData && patientsData.length > 0) {
+        setTimeout(fixMobilePatientItems, 500);
+      }
     }
     
     if (currentPositionData !== undefined) {
-      setCurrentPosition(currentPositionData);
-    }
-    
-    // Fix mobile patient items when data is updated
-    if (patientsData && patientsData.length > 0) {
-      setTimeout(fixMobilePatientItems, 300);
+      console.log("MobileQueuePage received updated current position:", currentPositionData);
+      // Ensure we're using a number for the current position
+      setCurrentPosition(parseInt(currentPositionData));
     }
   }, [patientsData, currentPositionData]);
 
@@ -68,11 +72,12 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
   
   // Apply mobile layout fix on mount and window resize
   useEffect(() => {
-    fixMobilePatientItems();
+    // Initial fix application after component mounts
+    setTimeout(fixMobilePatientItems, 500);
     
     const handleResize = () => {
       if (window.innerWidth <= 768) {
-        setTimeout(fixMobilePatientItems, 300);
+        setTimeout(fixMobilePatientItems, 500);
       }
     };
     
