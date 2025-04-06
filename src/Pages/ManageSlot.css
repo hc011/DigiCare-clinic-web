@@ -1,0 +1,18 @@
+.manage-slot-container {
+  margin-bottom: 70px; /* Add bottom margin for mobile to account for the bottom navigator */
+}
+
+@media (max-width: 768px) {
+  .manage-slot-container {
+    padding-top: 10px;
+  }
+}
+
+/* Custom switch styles */
+.MuiSwitch-thumb {
+  transition: all 0.3s ease;
+}
+
+.MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track {
+  opacity: 0.5 !important;
+} 

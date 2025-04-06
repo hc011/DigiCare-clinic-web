@@ -24,6 +24,7 @@ import { Navigate } from "react-router-dom";
 import AppointmentForm from "./components/AppointmentForm";
 import AppointmentDetails from "./Pages/AppointmentDetails";
 import webSocketService from "./services/websocketService";
+import ManageSlot from "./Pages/ManageSlot";
 
 import {
   fetchPatients,
@@ -33,7 +34,7 @@ import {
 import { ThemeProvider } from '@mui/material/styles';
 import { theme } from './theme/theme';
 import Dashboard from './Pages/Dashboard';
-import { getLatestCabinSlot, getCabinInfoFromUser } from './utils/dateUtils';
+import { getCabinInfo} from './utils/dateUtils';
 import PatientInfoPage from './Pages/PatientInfoPage';
 import ConsultationPage from './Pages/ConsultationPage';
 import PDFViewer from './components/PDFViewer';
@@ -45,7 +46,7 @@ const App = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   
   // Extract cabin information using the new utility function
-  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
+  const { cabinId, selectedSlot } = getCabinInfo(user);
   
   const isMobile = window.innerWidth <= 768;
   const [currentPosition, setCurrentPosition] = useState(1);
@@ -239,9 +240,12 @@ const App = () => {
   }, [cabinId, selectedSlot, currentUser]);
 
   useEffect(() => {
+
     const fetchInitialData = async () => {
       setLoading(true);
-      try {        
+      console.log(cabinId, selectedSlot);
+      try {            
+
         const patients = await fetchPatients(cabinId, selectedSlot);
         console.log(patients);
         setPatients(patients);
@@ -423,6 +427,14 @@ const App = () => {
                             currentPositionData={currentPosition} 
                             loading={loading}
                           />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/manage-slot"
+                      element={
+                        <PrivateRoute>
+                          <ManageSlot />
                         </PrivateRoute>
                       }
                     />

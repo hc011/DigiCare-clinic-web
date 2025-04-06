@@ -16,6 +16,7 @@ import HelpIcon from "@mui/icons-material/Help";
 import MedicationIcon from "@mui/icons-material/Medication";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import HistoryIcon from "@mui/icons-material/History";
+import SettingsIcon from "@mui/icons-material/Settings";
 
 const drawerWidth = 240;
 
@@ -27,6 +28,7 @@ export default function Sidebar() {
     { text: "Appointments Table", path: "/appointments", icon: AddIcon },
     { text: "Prescription Pad", path: "/prescription", icon: MedicationIcon },
     { text: "Past Appointments", path: "/past-appointments", icon: HistoryIcon },
+    { text: "Manage Slot", path: "/manage-slot", icon: SettingsIcon },
     { text: "Help", path: "/help", icon: HelpIcon },
   ];
 
