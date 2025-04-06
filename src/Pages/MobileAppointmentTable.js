@@ -41,7 +41,7 @@ import "./MobileAppointmentTable.css";
 import SearchIcon from "@mui/icons-material/Search";
 import { CheckCircle, Cancel, Edit } from "@mui/icons-material";
 import CloseIcon from "@mui/icons-material/Close";
-import { getCabinInfoFromUser } from "../utils/dateUtils";
+import { getCabinInfo } from "../utils/dateUtils";
 import webSocketService from "../services/websocketService";
 import { useNotification } from "../context/NotificationContext";
 
@@ -103,7 +103,7 @@ function generateDisplayRows(actualRows) {
 
 export default function MobileAppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
+  const { cabinId, selectedSlot } = getCabinInfo(user);
   
   // State for appointment data
   const [appointments, setAppointments] = useState([]);

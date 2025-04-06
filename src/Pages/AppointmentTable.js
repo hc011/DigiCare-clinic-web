@@ -38,10 +38,11 @@ import {
   removeAppointment,
   getPatientProfile,
   createSlot,
-  fetchAppointments
+  fetchAppointments,
+  fetchExpiredTokens
 } from "../services/api";
 import { useNotification } from "../context/NotificationContext";
-import { getCabinInfoFromUser } from '../utils/dateUtils';
+import { getCabinInfo } from '../utils/dateUtils';
 import { useNavigate, useLocation } from "react-router-dom";
 import webSocketService from "../services/websocketService";
 import { useAppointmentForm } from "../context/AppointmentFormContext";
@@ -131,10 +132,11 @@ function CustomToolbar(props) {
 
 export default function AppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
+  const { cabinId, selectedSlot } = getCabinInfo(user);
   const [currentCabinSlot, setCurrentCabinSlot] = useState(null);
 
   const [appointments, setAppointments] = useState([]);
+  const [expiredTokens, setExpiredTokens] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isAdding, setIsAdding] = React.useState(false);
   const [open, setOpen] = React.useState(false);
@@ -277,9 +279,18 @@ export default function AppointmentTable() {
     }
   };
 
+  const getExpiredTokens = async () => {
+    if (!cabinId || !selectedSlot) return;
+
+    const expiredTokens = await fetchExpiredTokens(cabinId, selectedSlot);
+    console.log(`Fetched ${expiredTokens.length} expired tokens`);
+    setExpiredTokens(expiredTokens);
+  };
+
   useEffect(() => {
     if (cabinId && selectedSlot && !loading) {
       getAppointments();
+      getExpiredTokens();
     }
   }, [cabinId, selectedSlot]);
 
