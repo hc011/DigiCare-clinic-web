@@ -62,9 +62,8 @@ const AppointmentForm = () => {
     lastName: "",
     checkin: false,
     paid: false,
-    mode: "cash",
-    fees_paid: 250,
-    status: "pending",
+    mode: "",
+    fees_paid: 0,
     disease: "",
     age: "",
     phone_number: "",
@@ -141,9 +140,8 @@ const AppointmentForm = () => {
       lastName: "",
       checkin: false,
       paid: false,
-      mode: "cash",
-      fees_paid: 250,
-      status: "pending",
+      mode: "",
+      fees_paid: 0,
       disease: "",
       age: "",
       phone_number: "",
@@ -509,6 +507,7 @@ const AppointmentForm = () => {
                         ...prev,
                         paid: e.target.checked,
                         mode: e.target.checked ? "cash" : "",
+                        fees_paid: e.target.checked ? 250 : 0,
                       }))
                     }
                   />
