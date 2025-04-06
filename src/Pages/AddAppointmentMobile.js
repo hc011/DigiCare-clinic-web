@@ -46,8 +46,8 @@ export default function AddAppointmentMobile({ patients }) {
     checkin: false,
     paid: false,
     status: "pending",
-    mode: "cash",
-    fees_paid: 250,
+    mode: "",
+    fees_paid: 0,
   });
 
   const { cabinId, selectedSlot } = getCabinInfo(user);
