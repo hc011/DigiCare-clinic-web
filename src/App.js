@@ -39,14 +39,15 @@ import PatientInfoPage from './Pages/PatientInfoPage';
 import ConsultationPage from './Pages/ConsultationPage';
 import PDFViewer from './components/PDFViewer';
 import usePDFViewer from './hooks/usePDFViewer';
+import { useCheckupCabin } from './context/CheckupCabinContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const App = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   
-  // Extract cabin information using the new utility function
-  const { cabinId, selectedSlot } = getCabinInfo(user);
+  // Get values directly from the context
+  const { isInitialized, cabinId, selectedSlot } = useCheckupCabin();
   
   const isMobile = window.innerWidth <= 768;
   const [currentPosition, setCurrentPosition] = useState(1);
@@ -198,56 +199,14 @@ const App = () => {
     };
   }, [cabinId, selectedSlot, currentUser]);
 
+  // Initial data loading
   useEffect(() => {
-    if (currentPosition) {
-      console.log("Current position  ---- :", currentPosition);
-    }
-  }, [currentPosition]);
-
-  // Setup WebSocket subscriber for cabinslot updates
-  useEffect(() => {
-    if (!cabinId || !selectedSlot || !currentUser) return;
-
-    console.log("Setting up WebSocket subscription for cabinslot updates in App");
-    
-    // Subscribe to cabinslot updates
-    const cabinslotUnsubscribe = webSocketService.subscribe('cabinslot', (response) => {
-      console.log("Received cabinslot update via WebSocket in App:", response);
-      try {
-        let cabinslotData = null;
-
-        // Handle different possible formats
-        if (response.data && response.data.type === "cabinslot_update" && response.data.data) {
-          cabinslotData = response.data.data;
-        } else if (response.data && response.data.type === "queue_update" && response.data.data && response.data.data.cabinslot) {
-          cabinslotData = response.data.data.cabinslot;
-        } else if (response.type === "cabinslot" && response.data) {
-          cabinslotData = response.data;
-        }
-        
-        if (cabinslotData && cabinslotData.current_number !== undefined) {
-          console.log("Updating current position from cabinslot to:", cabinslotData.current_number);
-          setCurrentPosition(parseInt(cabinslotData.current_number));
-        }
-      } catch (error) {
-        console.error("Error processing WebSocket cabinslot data in App:", error);
-      }
-    });
-
-    return () => {
-      cabinslotUnsubscribe();
-    };
-  }, [cabinId, selectedSlot, currentUser]);
-
-  useEffect(() => {
-
     const fetchInitialData = async () => {
       setLoading(true);
-      console.log(cabinId, selectedSlot);
+      console.log("Fetching initial data with:", cabinId, selectedSlot);
       try {            
-
         const patients = await fetchPatients(cabinId, selectedSlot);
-        console.log(patients);
+        console.log("Fetched patients:", patients);
         setPatients(patients);
         
         const { current_number } = await fetchCurrentPosition(cabinId, selectedSlot);
@@ -259,10 +218,14 @@ const App = () => {
       }
     };
 
-    if (cabinId && selectedSlot) {
+    // Only fetch initial data when context is initialized and we have the required values
+    if (isInitialized && cabinId && selectedSlot) {
+      console.log("CheckupCabinContext is initialized with valid cabin data, running fetchInitialData");
       fetchInitialData();
+    } else if (isInitialized) {
+      console.log("CheckupCabinContext is initialized but missing required data - cabinId:", cabinId, "selectedSlot:", selectedSlot);
     }
-  }, [cabinId, selectedSlot, currentUser]);
+  }, [isInitialized, cabinId, selectedSlot]);
 
   useEffect(() => {
     if (patients.length > 0 && currentPosition !== null) {

@@ -35,8 +35,9 @@ export const getCabinInfo = (user) => {
  * React hook for getting cabin information directly from the context
  * This hook can ONLY be used in React function components
  * 
- * @returns {Object} - Cabin information (cabinId, selectedSlot, cabinSlots)
+ * @returns {Object} - Cabin information (cabinId, selectedSlot, cabinSlots, isInitialized)
  */
 export const useContextCabinInfo = () => {
-  return useCheckupCabin().getCabinInfo();
+  const { isInitialized, cabinId, selectedSlot, cabinSlots } = useCheckupCabin();
+  return { cabinId, selectedSlot, cabinSlots, isInitialized };
 };
