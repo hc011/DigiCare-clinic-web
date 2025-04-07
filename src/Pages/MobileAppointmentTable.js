@@ -1084,7 +1084,7 @@ export default function MobileAppointmentTable() {
                 justifyContent: 'center'
               }}>
                 <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
-                  Total Collection
+                  Total
                 </Typography>
                 <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
                   ₹{summaryStats.payment.totalCollection}
