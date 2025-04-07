@@ -198,33 +198,6 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
         </Box>
       </Paper>
       
-      {/* Current Position Indicator */}
-      {!loading && currentPosition && (
-        <Paper 
-          elevation={1}
-          className="current-position-indicator" 
-          sx={{ 
-            m: 1, 
-            mt: 1.5, 
-            mb: 1.5, 
-            p: 1.5, 
-            borderRadius: 2,
-            backgroundColor: '#e3f2fd',
-            border: '1px solid #bbdefb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <Typography variant="subtitle1" className="current-position-label" sx={{ fontWeight: 500, mr: 1 }}>
-            Current Position:
-          </Typography>
-          <div className="current-position-number">
-            {currentPosition}
-          </div>
-        </Paper>
-      )}
-      
       <Container 
         maxWidth={false} 
         disableGutters

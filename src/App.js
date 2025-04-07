@@ -43,100 +43,6 @@ import { useCheckupCabin } from './context/CheckupCabinContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
-// Utility function to fill holes in patient list
-const fillHoles = (patientList) => {
-  if (!patientList || patientList.length === 0) return patientList;
-  
-  // Filter out position -1 patients and create a clean list
-  const filteredPatients = patientList.filter(p => p.position !== -1);
-  
-  // Find the min and max positions
-  const positions = filteredPatients.map(p => p.position);
-  const minPos = Math.min(...positions);
-  const maxPos = Math.max(...positions);
-  
-  // Create a new patients array
-  let updatedPatients = [...filteredPatients];
-  
-  // Count occurrences of each position to handle duplicates
-  const positionCounts = {};
-  filteredPatients.forEach(patient => {
-    const pos = patient.position;
-    positionCounts[pos] = (positionCounts[pos] || 0) + 1;
-  });
-  
-  // Track positions with real patients (non-hole type)
-  const positionsWithRealPatients = new Set();
-  filteredPatients.forEach(patient => {
-    if (patient.type !== "hole") {
-      positionsWithRealPatients.add(patient.position);
-    }
-  });
-  
-  // Track positions with holes that have real appointments
-  const positionsWithAppointmentHoles = new Set();
-  filteredPatients.forEach(patient => {
-    if (patient.type === "hole" && patient.appointment && 
-        !patient.appointment.appointment_id?.startsWith('hole-') &&
-        patient.appointment.appointment_id) {
-      positionsWithAppointmentHoles.add(patient.position);
-    }
-  });
-  
-  // Keep track of existing hole positions to avoid duplicates
-  const existingHolePositions = new Set(
-    filteredPatients
-      .filter(p => p.type === "hole")
-      .map(p => p.position)
-  );
-  
-  // Remove only "empty" holes that share positions with real patients
-  // Keep holes that have valid appointments
-  updatedPatients = updatedPatients.filter(patient => {
-    // Always keep non-hole patients
-    if (patient.type !== "hole") {
-      return true;
-    }
-    
-    // Keep holes with real appointments
-    if (patient.appointment && 
-        !patient.appointment.appointment_id?.startsWith('hole-') &&
-        patient.appointment.appointment_id) {
-      return true;
-    }
-    
-    // Remove empty holes that share a position with a real patient
-    if (positionsWithRealPatients.has(patient.position)) {
-      return false;
-    }
-    
-    // Keep all other holes
-    return true;
-  });
-  
-  // Fill in the holes for positions that have no patients at all
-  for (let pos = minPos; pos <= maxPos; pos++) {
-    if (!positionCounts[pos] && !existingHolePositions.has(pos)) {
-      // Only add a hole if no patient (real or hole) exists at this position
-      updatedPatients.push({
-        position: pos,
-        status: "pending",
-        paid: false,
-        checkin: false,
-        late: false,
-        type: "hole",
-        isHole: true, // Special identifier for hole patients
-        isMissingPosition: true, // Flag to indicate this is a naturally missing position
-        visible: true, // Ensure visibility
-        appointment: null // Allow for holes with null appointment (reserved spot)
-      });
-    }
-  }
-  
-  // Sort by position
-  return updatedPatients.sort((a, b) => a.position - b.position);
-};
-
 const App = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   
@@ -236,13 +142,14 @@ const App = () => {
         // Handle queue data
         if (queueData) {
           console.log("Processing queue update:", queueData);
+          
+          
           // Update patient state
           setPatients(prevPatients => {
             // Find if the updated patient already exists in our list
             const existingPatientIndex = prevPatients.findIndex(
               p => p.appointment?.appointment_id === queueData.appointment?.appointment_id
             );
-
             
             // If appointment data exists in the queue update
             if (queueData.appointment) {
@@ -252,8 +159,7 @@ const App = () => {
                 status: queueData.status,
                 paid: queueData.paid,
                 checkin: queueData.checkin,
-                late: queueData.late,
-                type: queueData.type
+                late: queueData.late
               };
               
               if (existingPatientIndex !== -1) {
@@ -263,14 +169,14 @@ const App = () => {
                   ...updatedPatients[existingPatientIndex],
                   ...updatedPatient
                 };
-                return fillHoles(updatedPatients);
+                return updatedPatients;
               } else {
                 // Add new patient to the list
-                return fillHoles([...prevPatients, updatedPatient]);
+                return [...prevPatients, updatedPatient];
               }
             }
             
-            return fillHoles(prevPatients);
+            return prevPatients;
           });
         }
         
@@ -300,16 +206,8 @@ const App = () => {
       console.log("Fetching initial data with:", cabinId, selectedSlot);
       try {            
         const patients = await fetchPatients(cabinId, selectedSlot);
-        console.log("Original patients from API:", "Fetched patients:", patients);
-        
-        // Filter out position -1 before applying fillHoles
-        const filteredPatients = patients.filter(p => p.position !== -1);
-        console.log("Filtered patients (no position -1):", filteredPatients);
-        
-        const patientsWithHoles = fillHoles(filteredPatients);
-        console.log("Patients with holes filled:", patientsWithHoles);
-        
-        setPatients(patientsWithHoles);
+        console.log("Fetched patients:", patients);
+        setPatients(patients);
         
         const { current_number } = await fetchCurrentPosition(cabinId, selectedSlot);
         setCurrentPosition(current_number);

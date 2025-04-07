@@ -55,26 +55,13 @@ const PatientItem = ({
   paid,
   checkin,
   status,
-  type,
-  isDraggable,
-  isMissingPosition
 }) => {
   const navigate = useNavigate();
   const [confirmAction, setConfirmAction] = useState(null);
   const [loadingType, setLoadingType] = useState(null);
+
+  // Remove debugger statement and add more useful debugging
   
-  // Check if this is a "hole" patient
-  const isHole = type === "hole";
-  // Check if hole has a real appointment (reserved spot)
-  const hasRealAppointment = isHole && appointment && 
-    !appointment.appointment_id?.startsWith('hole-') && 
-    appointment.name && 
-    appointment.name !== `Position ${position} (Empty)` && 
-    appointment.name !== `Reserved Position ${position}`;
-  // Check if this is an empty position without appointment
-  const isEmptyPosition = isHole && !hasRealAppointment;
-  // Check if this is a missing position or explicitly reserved
-  const isMissing = isMissingPosition === true;
 
   // Determine if this is the current patient based on position
   // Force evaluate as numbers to ensure proper comparison
@@ -100,10 +87,9 @@ const PatientItem = ({
       currentPosition,
       paid,
       checkin,
-      status,
-      type
+      status
     });
-  }, [position, appointment, late, currentPosition, paid, checkin, status, type]);
+  }, [position, appointment, late, currentPosition, paid, checkin, status]);
 
   // Add additional useEffect to detect changes in late status
   useEffect(() => {
@@ -158,19 +144,13 @@ const PatientItem = ({
     id: appointment.appointment_id,
   });
 
-  // Update the handlePatientClick to skip navigation for hole patients
+  // Add a function to handle clicking on the patient item
   const handlePatientClick = (e) => {
     // Prevent click if we're dragging
     if (isDragging) return;
     
     // Prevent click if we clicked on a button inside the item
     if (e.target.closest('button') || e.target.closest('.MuiIconButton-root')) {
-      return;
-    }
-    
-    // Skip navigation for hole patients
-    if (isHole) {
-      console.log('Clicked on a hole patient - no navigation');
       return;
     }
     
@@ -242,136 +222,66 @@ const PatientItem = ({
           transform: CSS.Transform.toString(transform),
           transition,
           opacity: isDragging ? 0.5 : 1,
-          cursor: isHole ? 'default' : 'pointer',
+          cursor: 'pointer',
           WebkitTapHighlightColor: 'rgba(0,0,0,0)', // Remove default tap highlight on mobile
-          backgroundColor: isHole ? '#f5f5f5' : '', // Different background for hole patients
-          border: isHole ? '1px dashed #ccc' : '' // Dashed border for hole patients
         }}
         className={`patient-item ${isCurrent ? "current" : ""} ${late ? "late" : ""} ${
           isDone ? "done" : ""
-        } ${isCancelled ? "cancelled" : ""} ${isPending ? "pending" : ""} ${isHole ? "hole" : ""}`}
+        } ${isCancelled ? "cancelled" : ""} ${isPending ? "pending" : ""}`}
         onClick={handlePatientClick} // Add the click handler
         data-paid={paid ? "true" : "false"}
         data-present={checkin ? "true" : "false"}
         data-late={late ? "true" : "false"}
         data-appointment-id={appointment.appointment_id}
-        data-is-hole={isHole ? "true" : "false"}
     >
       <div className="patient-content">
-          <div className={`token-badge ${isCurrent ? "current-token" : ""} ${late ? "late-token" : ""} ${status === "cancelled" ? "cancelled-token" : ""} ${isHole ? "hole-token" : ""} ${hasRealAppointment ? "reserved-token" : ""} ${isEmptyPosition ? "empty-token" : ""}`}>
+          <div className={`token-badge ${isCurrent ? "current-token" : ""} ${late ? "late-token" : ""} ${status === "cancelled" ? "cancelled-token" : ""}`}>
             <span>#{position === -1 ? appointment.token : (appointment.token || position)}</span>
           </div>
 
           <div className="patient-details">
             <div className="patient-header">
-              <Typography variant="h6" component="h3" sx={{ display: 'flex', alignItems: 'center' }}>
-                {isEmptyPosition ? (
-                  <>
-                    <Box component="span" sx={{ 
-                      mr: 0.5, 
-                      display: 'inline-flex', 
-                      backgroundColor: isMissing ? '#f0f0f0' : '#f8f8f8',
-                      color: isMissing ? '#757575' : '#666',
-                      fontSize: '0.7em',
-                      padding: '2px 4px',
-                      borderRadius: '4px'
-                    }}>
-                      {isMissing ? 'MISSING' : 'EMPTY'}
-                    </Box>
-                    Position {position}
-                  </>
-                ) : hasRealAppointment ? (
-                  <>
-                    <Box component="span" sx={{ 
-                      mr: 0.5, 
-                      display: 'inline-flex', 
-                      backgroundColor: '#e3f2fd',
-                      color: '#0d47a1',
-                      fontSize: '0.7em',
-                      padding: '2px 4px',
-                      borderRadius: '4px'
-                    }}>
-                      HOLE
-                    </Box>
-                    {appointment.name || "Unknown Patient"}
-                  </>
-                ) : (
-                  appointment.name || "Unknown Patient"
-                )}
-              </Typography>
-
               <Typography variant="h6" component="h3">
-                <span>Position: {position}</span><br />
-              </Typography>
-
-              <Typography variant="h6" component="h3">
-                <span>Type: {type} {hasRealAppointment ? '(with appointment)' : ''}</span>
+                {appointment.name || "Unknown Patient"}
               </Typography>
               
               <div className="status-tags">
-                {/* Show specific tags for different types of hole patients */}
-                {isHole ? (
-                  <>
-                    <Chip
-                      icon={hasRealAppointment ? <PersonPin fontSize="small" /> : <PersonOff fontSize="small" />}
-                      label={hasRealAppointment ? "HOLE" : (isMissing ? "Missing Position" : "Empty Slot")}
-                      size="small"
-                      color={hasRealAppointment ? "primary" : "default"}
-                      variant="outlined"
-                      sx={{ fontStyle: hasRealAppointment ? 'normal' : 'italic' }}
-                    />
-                    {isMissing && (
-                      <Chip
-                        icon={<PersonOff fontSize="small" />}
-                        label="Position Gap"
-                        size="small"
-                        color="default"
-                        variant="outlined"
-                        sx={{ bgcolor: '#eeeeee', fontStyle: 'italic' }}
-                      />
-                    )}
-                  </>
+                {/* Add check-in status */}
+                {checkin ? (
+                  <Chip
+                    icon={<PersonPin fontSize="small" />}
+                    label="Present"
+                    size="small"
+                    color="info"
+                    variant="outlined"
+                  />
                 ) : (
-                  <>
-                    {/* Regular tags for normal patients */}
-                    {/* Add check-in status */}
-                    {checkin ? (
-                      <Chip
-                        icon={<PersonPin fontSize="small" />}
-                        label="Present"
-                        size="small"
-                        color="info"
-                        variant="outlined"
-                      />
-                    ) : (
-                      <Chip
-                        icon={<PersonOff fontSize="small" />}
-                        label="Not Present"
-                        size="small"
-                        color="default"
-                        variant="outlined"
-                      />
-                    )}
-                    
-                    {/* Add payment status */}
-                    {paid ? (
-                      <Chip
-                        icon={<Paid fontSize="small" />}
-                        label="Paid"
-                        size="small"
-                        color="success"
-                        variant="outlined"
-                      />
-                    ) : (
-                      <Chip
-                        icon={<MoneyOff fontSize="small" />}
-                        label="Not Paid"
-                        size="small"
-                        color="warning"
-                        variant="outlined"
-                      />
-                    )}
-                  </>
+                  <Chip
+                    icon={<PersonOff fontSize="small" />}
+                    label="Not Present"
+                    size="small"
+                    color="default"
+                    variant="outlined"
+                  />
+                )}
+                
+                {/* Add payment status */}
+                {paid ? (
+                  <Chip
+                    icon={<Paid fontSize="small" />}
+                    label="Paid"
+                    size="small"
+                    color="success"
+                    variant="outlined"
+                  />
+                ) : (
+                  <Chip
+                    icon={<MoneyOff fontSize="small" />}
+                    label="Not Paid"
+                    size="small"
+                    color="warning"
+                    variant="outlined"
+                  />
                 )}
                 
                 {late && (
@@ -418,55 +328,50 @@ const PatientItem = ({
           </div>
           
           <div className="action-buttons">
-            {/* Don't show any buttons for hole patients */}
-            {!isHole && (
-              <>
-                {/* Mark Done button - show for all patients that aren't already done */}
-                {!isDone && (
-                  <Tooltip title="Mark as Done">
-                    <MuiButton
-                      variant={isCurrent ? "contained" : "outlined"}
-                      color="primary"
-                      size="small"
-                      startIcon={<DoneAll />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmAction("next");
-                      }}
-                      disabled={loadingType === "next" || isDone}
-                      sx={{ mr: 1 }}
-                    >
-                      {loadingType === "next" ? (
-                        <CircularProgress size={20} color="inherit" />
-                      ) : (
-                        "Done"
-                      )}
-                    </MuiButton>
-                  </Tooltip>
-                )}
-                
-                {/* Mark Late button - show for all patients that aren't already late or done */}
-                {!isDone && (
-                  <Tooltip title="Mark as Late">
-                    <MuiButton
-                      variant="outlined"
-                      color="secondary"
-                      size="small"
-                      startIcon={<Schedule />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmAction("late");
-                      }}
-                    >
-                      {loadingType === "late" ? (
-                        <CircularProgress size={20} color="inherit" />
-                      ) : (
-                        "Late"
-                      )}
-                    </MuiButton>
-                  </Tooltip>
-                )}
-              </>
+            {/* Mark Done button - show for all patients that aren't already done */}
+            {!isDone && (
+              <Tooltip title="Mark as Done">
+                <MuiButton
+                  variant={isCurrent ? "contained" : "outlined"}
+                  color="primary"
+                  size="small"
+                  startIcon={<DoneAll />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmAction("next");
+                  }}
+                  disabled={loadingType === "next" || isDone}
+                  sx={{ mr: 1 }}
+                >
+                  {loadingType === "next" ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    "Done"
+                  )}
+                </MuiButton>
+              </Tooltip>
+            )}
+            
+            {/* Mark Late button - show for all patients that aren't already late or done */}
+            {!isDone && (
+              <Tooltip title="Mark as Late">
+                <MuiButton
+                  variant="outlined"
+                  color="secondary"
+                  size="small"
+                  startIcon={<Schedule />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setConfirmAction("late");
+                  }}
+                >
+                  {loadingType === "late" ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    "Late"
+                  )}
+                </MuiButton>
+              </Tooltip>
             )}
           </div>
           
