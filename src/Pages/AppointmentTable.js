@@ -1093,7 +1093,7 @@ export default function AppointmentTable() {
                     setSelectedAppointment((prev) => ({
                       ...prev,
                       paid: e.target.checked,
-                      mode: e.target.checked ? prev.mode || "cash" : "",
+                      mode: e.target.checked ? "cash" : "",
                       fees_paid: e.target.checked ? prev.fees_paid || 250 : 0,
                     }))
                   }
