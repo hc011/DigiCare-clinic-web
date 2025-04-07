@@ -39,12 +39,15 @@ const QueueContainer = ({
   }, [patients]);
 
   useEffect(() => {
+    // Include pending patients and all hole patients regardless of status
+    debugger;          
+
     const sortedPatients = [...patients]
       .filter((p) => p.status === "pending")
       .sort((a, b) => a.position - b.position);
 
     setMergedGroup(sortedPatients);
-    console.log('Sorted patients for queue:', sortedPatients);
+    console.log('Sorted patients for queue (including holes):', sortedPatients);
     console.log('Current position in queue:', currentPosition);
   }, [patients, currentPosition]);
 
@@ -68,6 +71,17 @@ const QueueContainer = ({
     if (!over || active.id === over.id) return;
 
     originalPatientsRef.current = [...patients];
+
+    const activePatient = mergedGroup.find(
+      (p) => p.appointment?.appointment_id === active.id
+    );
+    
+    // Don't allow dragging of hole patients without real appointments
+    if (activePatient && activePatient.type === "hole" && 
+        (!activePatient.appointment || activePatient.appointment.appointment_id?.startsWith('hole-'))) {
+      console.log('Cannot drag a hole patient without a real appointment');
+      return;
+    }
 
     const activeIndex = mergedGroup.findIndex(
       (p) => p.appointment?.appointment_id === active.id
@@ -118,6 +132,29 @@ const QueueContainer = ({
 
   return (
     <div className="queue-container">
+      {/* Add current position indicator at the top */}
+      {!loading && (
+        <Box 
+          className="current-position-indicator"
+          sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            alignItems: 'center',
+            mb: 2,
+            p: 2,
+            backgroundColor: '#e3f2fd',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            border: '1px solid #bbdefb'
+          }}
+        >
+          <Typography variant="h6" component="div" className="current-position-label" sx={{ mr: 1 }}>Current Position:</Typography>
+          <div className="current-position-number">
+            {currentPosition}
+          </div>
+        </Box>
+      )}
+
       {loading ? (
         <div className="skeleton-container">
           {[...Array(5)].map((_, index) => (
@@ -204,24 +241,44 @@ const QueueContainer = ({
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={mergedGroup.map((p) => p.appointment.appointment_id)}
+            items={mergedGroup.map((p) => p.appointment?.appointment_id || `hole-${p.position}`)}
             strategy={verticalListSortingStrategy}
           >
-            {mergedGroup.map((patient) => (
-              <PatientItem
-                key={patient.appointment.appointment_id}
-                position={patient.position}
-                appointment={patient.appointment}
-                late={patient.late}
-                currentPosition={currentPosition}
-                handleNextPatient={handleNextPatient}
-                handleLatePatient={handleLatePatient}
-                isDraggable={patient.position > currentPosition}
-                paid={patient.paid}
-                status={patient.status}
-                checkin={patient.checkin}
-              />
-            ))}
+            {mergedGroup.map((patient) => {
+              // Determine if it's draggable based on type, position, and appointment
+              const isDraggable = 
+                patient.position > currentPosition && 
+                !(patient.type === "hole" && (!patient.appointment || patient.appointment?.appointment_id?.startsWith('hole-')));
+                
+              // Create a default appointment object if it's null
+              const safeAppointment = patient.appointment || {
+                name: patient.isMissingPosition ? `Missing Position ${patient.position}` : `Reserved Position ${patient.position}`,
+                token: patient.position,
+                appointment_id: `hole-${patient.position}`,
+                appointment_type: "N/A",
+                disease: "",
+                fees_paid: 0,
+                mode: "N/A"
+              };
+                
+              return (
+                <PatientItem
+                  key={patient.appointment?.appointment_id || `hole-${patient.position}`}
+                  position={patient.position}
+                  appointment={safeAppointment}
+                  late={patient.late}
+                  currentPosition={currentPosition}
+                  handleNextPatient={handleNextPatient}
+                  handleLatePatient={handleLatePatient}
+                  isDraggable={isDraggable}
+                  paid={patient.paid}
+                  status={patient.status}
+                  checkin={patient.checkin}
+                  type={patient.type}
+                  isMissingPosition={patient.isMissingPosition || false}
+                />
+              );
+            })}
           </SortableContext>
         </DndContext>
       )}
