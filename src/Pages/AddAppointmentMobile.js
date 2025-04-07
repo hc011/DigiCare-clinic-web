@@ -252,6 +252,7 @@ export default function AddAppointmentMobile({ patients }) {
         <TextField
           fullWidth
           label="Token Number"
+          disabled={loading}
           name="token"
           type="number"
           value={formData.token}
