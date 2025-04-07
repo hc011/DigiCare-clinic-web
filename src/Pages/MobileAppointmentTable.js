@@ -35,7 +35,8 @@ import {
   updateAppointmentDetails,
   removeAppointment,
   getPatientProfile,
-  fetchAppointments as fetchAppointmentsApi
+  fetchAppointments as fetchAppointmentsApi,
+  fetchExpiredTokens
 } from "../services/api";
 import "./MobileAppointmentTable.css";
 import SearchIcon from "@mui/icons-material/Search";
@@ -63,7 +64,7 @@ const getStatusColor = (status) => {
 };
 
 // Function to generate display rows with placeholders for missing tokens
-function generateDisplayRows(actualRows) {
+function generateDisplayRows(actualRows, expiredTokens = []) {
   if (actualRows.length === 0) return [];
 
   const tokens = actualRows.map((row) => parseInt(row.token) || 0);
@@ -79,6 +80,10 @@ function generateDisplayRows(actualRows) {
 
   return allTokens.map((token) => {
     const existing = tokenMap.get(token);
+    
+    // Check if this token is in the expired tokens list
+    const isExpired = expiredTokens.includes(token);
+    
     return (
       existing || {
         id: token.toString(),
@@ -96,6 +101,7 @@ function generateDisplayRows(actualRows) {
         guardian: "",
         appointment_type: "",
         isPlaceholder: true,
+        isExpiredSlot: isExpired, // Add this flag for expired slots
       }
     );
   });
@@ -142,6 +148,8 @@ export default function MobileAppointmentTable() {
     }
     return { cabinNumber: "", doctorName: "Dr." };
   }, [user]);
+
+  const [expiredTokens, setExpiredTokens] = useState([]);
 
   // Handler to edit a specific appointment row
   const handleEditClick = (row) => {
@@ -353,10 +361,25 @@ export default function MobileAppointmentTable() {
     }
   };
 
+  // Fetch expired tokens data
+  const getExpiredTokens = async () => {
+    if (!cabinId || !selectedSlot) return;
+
+    try {
+      const response = await fetchExpiredTokens(cabinId, selectedSlot);
+      console.log(`Fetched ${response.expired_tokens.length} expired tokens:`, response.expired_tokens);
+      setExpiredTokens(response.expired_tokens || []);
+    } catch (error) {
+      console.error("Error fetching expired tokens:", error);
+      setExpiredTokens([]);
+    }
+  };
+
   // Initial fetch on component mount
   useEffect(() => {
     if (cabinId && selectedSlot) {
       fetchAppointmentsData();
+      getExpiredTokens();
     }
   }, [cabinId, selectedSlot]);
 
@@ -466,10 +489,10 @@ export default function MobileAppointmentTable() {
       });
   }, [appointments, filterStatus, searchQuery]);
 
-  // Generate display rows with placeholders for missing tokens
+  // Generate display rows with placeholders for missing tokens and expired tokens
   const displayedRows = useMemo(() => 
-    generateDisplayRows(filteredAppointments), 
-    [filteredAppointments]
+    generateDisplayRows(filteredAppointments, expiredTokens), 
+    [filteredAppointments, expiredTokens]
   );
 
   // Render functions
@@ -1094,11 +1117,13 @@ export default function MobileAppointmentTable() {
                     backgroundColor: appointment.isPlaceholder ? '#f9f9f9' : 'inherit'
                   }}
                 >
-                  <TableCell sx={{ py: 1, px: { xs: 1, sm: 2 } }}>#{appointment.token}</TableCell>
+                  <TableCell sx={{ py: 1, px: { xs: 1, sm: 2 } }}>
+                    {appointment.isExpiredSlot ? "X" : `#${appointment.token}`}
+                  </TableCell>
                   <TableCell sx={{ py: 1, px: { xs: 1, sm: 2 } }}>
                     {appointment.isPlaceholder ? (
                       <Typography variant="body2" sx={{ color: '#999', fontStyle: 'italic' }}>
-                        Empty Slot
+                        {appointment.isExpiredSlot ? "Expired Slot" : "Empty Slot"}
                       </Typography>
                     ) : (
                       <Typography variant="body1">
@@ -1109,7 +1134,7 @@ export default function MobileAppointmentTable() {
                   <TableCell sx={{ py: 1, px: { xs: 1, sm: 2 } }}>
                     {appointment.isPlaceholder ? (
                       <Typography variant="body2" sx={{ color: '#999', fontStyle: 'italic' }}>
-                        Available
+                        {appointment.isExpiredSlot ? "Expired" : "Available"}
                       </Typography>
                     ) : (
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 0.3 }}>

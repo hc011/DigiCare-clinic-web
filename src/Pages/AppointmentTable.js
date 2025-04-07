@@ -73,7 +73,7 @@ const CustomNoRowsOverlay = () => (
   </div>
 );
 
-function generateDisplayRows(actualRows) {
+function generateDisplayRows(actualRows, expiredTokens = []) {
   if (actualRows.length === 0) return [];
 
   const tokens = actualRows.map((row) => row.token);
@@ -89,6 +89,10 @@ function generateDisplayRows(actualRows) {
 
   return allTokens.map((token) => {
     const existing = tokenMap.get(token);
+    
+    // Check if this token is in the expired tokens list
+    const isExpired = expiredTokens.includes(token);
+    
     return (
       existing || {
         id: token,
@@ -107,6 +111,7 @@ function generateDisplayRows(actualRows) {
         guardian: "",
         appointment_type: "",
         isPlaceholder: true,
+        isExpiredSlot: isExpired, // Add this flag for expired slots
       }
     );
   });
@@ -282,9 +287,14 @@ export default function AppointmentTable() {
   const getExpiredTokens = async () => {
     if (!cabinId || !selectedSlot) return;
 
-    const expiredTokens = await fetchExpiredTokens(cabinId, selectedSlot);
-    console.log(`Fetched ${expiredTokens.length} expired tokens`);
-    setExpiredTokens(expiredTokens);
+    try {
+      const response = await fetchExpiredTokens(cabinId, selectedSlot);
+      console.log(`Fetched ${response.expired_tokens.length} expired tokens:`, response.expired_tokens);
+      setExpiredTokens(response.expired_tokens || []);
+    } catch (error) {
+      console.error("Error fetching expired tokens:", error);
+      setExpiredTokens([]);
+    }
   };
 
   useEffect(() => {
@@ -480,7 +490,7 @@ export default function AppointmentTable() {
             color: params.row.isPlaceholder ? "#666" : "#1976d2",
           }}
         >
-          #{params?.row?.token || ""}
+          {params.row.isExpiredSlot ? "X" : `#${params?.row?.token || ""}`}
         </div>
       ),
     },
@@ -491,7 +501,9 @@ export default function AppointmentTable() {
       editable: false,
       renderCell: (params) =>
         params.row.isPlaceholder ? (
-          <span style={{ color: "#666", fontStyle: "italic" }}>Empty Slot</span>
+          <span style={{ color: "#666", fontStyle: "italic" }}>
+            {params.row.isExpiredSlot ? "Expired" : "Empty"} Slot
+          </span>
         ) : (
           <span>{params.value || ""}</span>
         ),
@@ -503,7 +515,9 @@ export default function AppointmentTable() {
       editable: false,
       renderCell: (params) =>
         params.row.isPlaceholder ? (
-          <span style={{ color: "#666", fontStyle: "italic" }}>Empty Slot</span>
+          <span style={{ color: "#666", fontStyle: "italic" }}>
+            {params.row.isExpiredSlot ? "Expired" : "Empty"} Slot
+          </span>
         ) : (
           <span>{params.value || ""}</span>
         ),
@@ -1450,7 +1464,7 @@ export default function AppointmentTable() {
   );
 
   // Calculate displayedRows based on rows after rows is defined
-  const displayedRows = React.useMemo(() => generateDisplayRows(rows), [rows]);
+  const displayedRows = React.useMemo(() => generateDisplayRows(rows, expiredTokens), [rows, expiredTokens]);
 
   return (
     <div
