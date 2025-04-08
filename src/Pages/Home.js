@@ -24,6 +24,7 @@ export default function Home({
   currentPosition,
   setPatients,
   loading,
+  queueList
 }) {
   const isMobile = useMediaQuery("(max-width: 768px)");
   const currentPatient = patients.find((p) => parseInt(p.position) === parseInt(currentPosition));
@@ -82,6 +83,7 @@ export default function Home({
           patients={patients}
           currentPatient={currentPatient}
           loading={loading}
+          queueList={queueList}
         />
       )}
     </div>

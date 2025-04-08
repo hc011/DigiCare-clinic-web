@@ -353,7 +353,7 @@ const PatientItem = ({
             )}
             
             {/* Mark Late button - show for all patients that aren't already late or done */}
-            {!isDone && (
+            {!isDone && isCurrent && (
               <Tooltip title="Mark as Late">
                 <MuiButton
                   variant="outlined"
@@ -368,16 +368,16 @@ const PatientItem = ({
                   {loadingType === "late" ? (
                     <CircularProgress size={20} color="inherit" />
                   ) : (
-                    "Late"
+                    "Not Present"
                   )}
                 </MuiButton>
               </Tooltip>
             )}
           </div>
           
-          <div className="drag-handle" {...attributes} {...listeners}>
+          {checkin && <div className="drag-handle" {...attributes} {...listeners}>
             <DragHandleIcon />
-          </div>
+          </div>}
         </div>
       </div>
 

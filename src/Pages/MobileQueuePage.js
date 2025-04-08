@@ -23,7 +23,7 @@ import "./MobileQueuePage.css";
 import { getCabinInfo } from "../utils/dateUtils";
 import fixMobilePatientItems from "../components/MobilePatientItemFix";
 
-const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, loading }) => {
+const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, loading, queueList }) => {
   const [patients, setPatients] = useState([]);
   const [currentPosition, setCurrentPosition] = useState(null);
   const [localLoading, setLocalLoading] = useState(true);
@@ -120,9 +120,9 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
 
   // Calculate queue summary stats
   const queueStats = {
-    total: patients.length,
-    pending: patients.filter(p => p.status === "pending").length,
-    checkedIn: patients.filter(p=> p.status === "pending").filter(p => p.checkin).length,
+    total: queueList.filter(p => p.appointment !== null).length,
+    pending: queueList.filter(p => p.appointment !== null).filter(p => p.position !== -1).filter(p => p.status === "pending").length,
+    checkedIn: queueList.filter(p => p.appointment !== null).filter(p => p.position !== -1).filter(p => p.status === "pending").filter(p => p.checkin).length,
   };
 
   // If not mobile, display a message suggesting to use desktop view

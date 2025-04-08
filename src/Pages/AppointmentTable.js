@@ -76,39 +76,51 @@ const CustomNoRowsOverlay = () => (
 function generateDisplayRows(actualRows) {
   if (actualRows.length === 0) return [];
 
-  const tokens = actualRows.map((row) => row.token);
+  const tokens = actualRows.map((row) => parseInt(row.token) || 0);
   const minToken = Math.min(...tokens);
   const maxToken = Math.max(...tokens);
 
+  // Create a Set of all actual tokens to track which ones exist
+  const existingTokens = new Set(tokens);
+  
+  // Generate all tokens from minToken to maxToken (filling gaps)
   const allTokens = Array.from(
     { length: maxToken - minToken + 1 },
     (_, i) => minToken + i
   );
 
-  const tokenMap = new Map(actualRows.map((row) => [row.token, row]));
+  const tokenMap = new Map(actualRows.map((row) => [parseInt(row.token) || 0, row]));
 
   return allTokens.map((token) => {
+    // If token exists in actual rows, use that data
     const existing = tokenMap.get(token);
-    return (
-      existing || {
-        id: token,
-        token: token,
-        appointment_id: "",
-        firstName: "",
-        lastName: "",
-        checkin: false,
-        paid: false,
-        status: "",
-        disease: "",
-        age: "",
-        phone_number: "",
-        location: "",
-        sex: "",
-        guardian: "",
-        appointment_type: "",
-        isPlaceholder: true,
-      }
-    );
+    if (existing) {
+      // Make sure it has an ID that works with getRowId
+      return {
+        ...existing,
+        id: existing.appointment_id || `token-${token}`
+      };
+    }
+    
+    // Otherwise return a placeholder object with stable ID
+    return {
+      id: `placeholder-${token}`,
+      token: token,
+      appointment_id: "",
+      firstName: "",
+      lastName: "",
+      checkin: false,
+      paid: false,
+      status: "",
+      disease: "",
+      age: "",
+      phone_number: "",
+      location: "",
+      sex: "",
+      guardian: "",
+      appointment_type: "",
+      isPlaceholder: true,
+    };
   });
 }
 
@@ -263,9 +275,14 @@ export default function AppointmentTable() {
       const fetchedAppointments = await fetchAppointments(cabinId, selectedSlot);
       console.log(`Fetched ${fetchedAppointments.length} appointments`);
       const formattedAppointments = fetchedAppointments.map(apt => {
+        // Parse token as integer and ensure stable IDs
+        const tokenNumber = parseInt(apt.token, 10) || 0;
+        
         return {
           ...apt,
-          id: apt.appointment_id || apt.token || Math.random().toString(36).substr(2, 9)
+          // Use appointment_id if available, otherwise use token string with a stable prefix
+          id: apt.appointment_id || `token-${tokenNumber}`,
+          token: tokenNumber
         };
       });
       setAppointments(formattedAppointments);
@@ -328,9 +345,13 @@ export default function AppointmentTable() {
             const name = appointmentData.patient_name || appointmentData.name || '';
             const nameParts = name.split(' ');
             
+            // Parse token as integer for consistent handling
+            const tokenNumber = parseInt(appointmentData.token, 10) || 0;
+            
             const formattedAppointment = {
-              id: appointmentData.appointment_id || appointmentData.token || Math.random().toString(36).substr(2, 9),
-              token: appointmentData.token || "",
+              // Use appointment_id if available, otherwise use token with stable prefix
+              id: appointmentData.appointment_id || `token-${tokenNumber}`,
+              token: tokenNumber,
               appointment_id: appointmentData.appointment_id,
               firstName: nameParts[0] || "",
               lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
@@ -397,9 +418,12 @@ export default function AppointmentTable() {
         const patientName = appointment.patient_name || appointment.name || '';
         const nameParts = patientName.split(' ');
         
+        // Parse token as an integer, defaulting to 0 if invalid
+        const tokenNumber = parseInt(appointment.token, 10) || 0;
+        
         return {
-          id: appointment.appointment_id || appointment.token,
-          token: appointment.token || "",
+          id: appointment.appointment_id || tokenNumber.toString(),
+          token: tokenNumber,
           appointment_id: appointment.appointment_id,
           firstName: nameParts[0] || "",
           lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
@@ -414,7 +438,7 @@ export default function AppointmentTable() {
           location: appointment.location || (appointment.patient?.location) || "",
           sex: appointment.sex || (appointment.patient?.gender) || "",
           guardian: appointment.guardian_name || (appointment.patient?.guardian) || "",
-          appointment_type: appointment.appointment_type ,
+          appointment_type: appointment.appointment_type,
           isPlaceholder: false,
         };
       });
@@ -674,7 +698,16 @@ export default function AppointmentTable() {
   };
 
   const validateToken = (token) => {
-    return !appointments.some((row) => row.token === parseInt(token));
+    // Convert token to integer for consistent comparison
+    const tokenNumber = parseInt(token, 10);
+    
+    // Check if token is a valid number
+    if (isNaN(tokenNumber) || tokenNumber <= 0) {
+      return false;
+    }
+    
+    // Check if this token is already in use by comparing integers
+    return !appointments.some((row) => parseInt(row.token, 10) === tokenNumber);
   };
 
   const AddAppointmentApi = async (newEntry) => {
@@ -699,9 +732,13 @@ export default function AppointmentTable() {
         checkin: newEntry.checkin
       });
       
+      // Get token as integer for consistency
+      const tokenNumber = parseInt(result?.queue?.appointment?.token, 10) || 0;
+      
       const newAppointment = {
-        id: result?.queue?.appointment?.token ,
-        token: result?.queue?.appointment?.token ,
+        // Use appointment_id if available, otherwise use token with stable prefix
+        id: result?.queue?.appointment?.appointment_id || `token-${tokenNumber}`,
+        token: tokenNumber,
         appointment_id: result?.queue?.appointment?.appointment_id || "",
         firstName: result?.queue?.appointment?.name?.split(" ")[0] || "",
         lastName: result?.queue?.appointment?.name?.split(" ").slice(1).join(" ") || "",
@@ -1600,7 +1637,21 @@ export default function AppointmentTable() {
               maxWidth: "100% !important",
             },
           }}
-          getRowId={(row) => row.appointment_id || row.token || Math.random().toString(36).substr(2, 9)}
+          getRowId={(row) => {
+            // For placeholder rows, use the placeholder ID we assigned
+            if (row.isPlaceholder) {
+              return row.id;
+            }
+            
+            // For actual appointments, use appointment_id if available
+            if (row.appointment_id) {
+              return row.appointment_id;
+            }
+            
+            // Otherwise use a stable token-based ID
+            const tokenNumber = parseInt(row.token, 10) || 0;
+            return `token-${tokenNumber}`;
+          }}
         />
       </div>
 
