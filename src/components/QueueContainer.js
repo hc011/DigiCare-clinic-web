@@ -20,7 +20,7 @@ import {
   Box,
 } from "@mui/material";
 import { markPatientAsDone, markPatientAsLate, shufflePatientPosition } from "../services/api";
-
+import { useNotification } from "../context/NotificationContext";
 const QueueContainer = ({
   loading,
   patients,
@@ -33,7 +33,7 @@ const QueueContainer = ({
   const [dragOverId, setDragOverId] = useState(null);
   const originalPatientsRef = useRef([]);
   const [isShifting, setIsShifting] = useState(false);
-
+  const { showWarningSnackbar } = useNotification();
   useEffect(() => {
     console.log('QueueContainer received patients:', patients);
   }, [patients]);
@@ -64,9 +64,13 @@ const QueueContainer = ({
   };
 
   const handleDragEnd = async (event) => {
-    debugger;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
+
+    if(!isDropAllowed({ active, over })) {
+      showWarningSnackbar("Dragging before the current patient is not allowed.", 4000);
+      return;
+    }
 
     originalPatientsRef.current = [...patients];
 
@@ -101,7 +105,6 @@ const QueueContainer = ({
     );
     
     let newPosition;
-    debugger;
     // Determine if dragging up or down
     if (activeIndex > overIndex) {
       // Dragging UP
@@ -110,7 +113,7 @@ const QueueContainer = ({
         newPosition = patients.sort((a, b) => a.position - b.position)[0].position - 1;
       } else {
         // Position between the drop target and the item after it
-        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position - 1;
+        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex-1].position + 1;
       }
     } else {
       // Dragging DOWN
@@ -135,6 +138,24 @@ const QueueContainer = ({
   const handleCancelDrag = () => {
     setPatients(originalPatientsRef.current);
     setConfirmDrag(false);
+  };
+
+  // Add a function to determine if a drop is allowed based on positions
+  const isDropAllowed = ({ active, over }) => {
+    if (!over) return false;
+
+    // Find positions of active and over items
+    const activePatient = mergedGroup.find(
+      (p) => p.appointment?.appointment_id === active.id
+    );
+    const overPatient = mergedGroup.find(
+      (p) => p.appointment?.appointment_id === over.id
+    );
+
+    if (!activePatient || !overPatient) return false;
+
+    // Don't allow dragging to a position at or below current position
+    return overPatient.position > currentPosition;
   };
 
   return (
@@ -223,6 +244,7 @@ const QueueContainer = ({
           modifiers={[restrictToVerticalAxis]}
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
+          autoScroll={true}
         >
           <SortableContext
             items={mergedGroup.map((p) => p.appointment.appointment_id)}

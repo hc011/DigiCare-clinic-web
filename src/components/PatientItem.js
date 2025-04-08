@@ -52,6 +52,7 @@ const PatientItem = ({
   currentPosition,
   handleNextPatient,
   handleLatePatient,
+  isDraggable,
   paid,
   checkin,
   status,
@@ -142,6 +143,7 @@ const PatientItem = ({
     isDragging,
   } = useSortable({
     id: appointment.appointment_id,
+    disabled: !isDraggable,
   });
 
   // Add a function to handle clicking on the patient item
@@ -233,6 +235,7 @@ const PatientItem = ({
         data-present={checkin ? "true" : "false"}
         data-late={late ? "true" : "false"}
         data-appointment-id={appointment.appointment_id}
+        data-draggable={isDraggable ? "true" : "false"}
     >
       <div className="patient-content">
           <div className={`token-badge ${isCurrent ? "current-token" : ""} ${late ? "late-token" : ""} ${status === "cancelled" ? "cancelled-token" : ""}`}>
@@ -375,7 +378,7 @@ const PatientItem = ({
             )}
           </div>
           
-          {checkin && <div className="drag-handle" {...attributes} {...listeners}>
+          {checkin && isDraggable && <div className="drag-handle" {...attributes} {...listeners}>
             <DragHandleIcon />
           </div>}
         </div>
