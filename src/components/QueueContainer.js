@@ -64,6 +64,7 @@ const QueueContainer = ({
   };
 
   const handleDragEnd = async (event) => {
+    debugger;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -90,13 +91,13 @@ const QueueContainer = ({
 
   const handleConfirmDrag = async () => {
     setIsShifting(true);
-    
-    // Find the indices in the current state
-    const activeIndex = mergedGroup.findIndex(
-      (p) => p.appointment?.appointment_id === dragOverId
-    );
-    const overIndex = mergedGroup.findIndex(
+
+    const sortedPatients = patients.sort((a, b) => a.position - b.position);
+    const activeIndex = sortedPatients.findIndex(
       (p) => p.appointment?.appointment_id === dragActiveId
+    );
+    const overIndex = sortedPatients.findIndex(
+      (p) => p.appointment?.appointment_id === dragOverId
     );
     
     let newPosition;
