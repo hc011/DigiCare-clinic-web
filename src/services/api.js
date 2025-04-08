@@ -185,7 +185,7 @@ export const getAppointmentDetails = async (appointmentId) => {
 export const getPatientDetails = async (patientId) => {
   try {
     const response = await axiosInstance.get(
-      `/userinfo/patients/details/${patientId}/`,
+      `/patientinfo/patients/details/${patientId}/`,
       { withCredentials: true } 
     );
     return response.data;
@@ -401,7 +401,7 @@ export const deleteAttachment = async(attachment_id) => {
 export const getPatientProfile = async(phone_number) => {
   try {
     const response = await axiosInstance.post(
-      `userinfo/patients/profiles/`,
+      `patientinfo/patients/profiles/`,
       {phone_number: phone_number},
       {withCredentials: true}
     );
