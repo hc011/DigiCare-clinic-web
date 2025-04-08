@@ -42,7 +42,7 @@ const AppointmentForm = () => {
   const [error, setError] = useState("");
   const [mobileSearchResults, setMobileSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const { showSuccessSnackbar, showErrorSnackbar } = useNotification();
+  const { showSuccessSnackbar, showErrorSnackbar, showWarningSnackbar } = useNotification();
   // Create a ref for updateMaxToken to avoid dependency cycle
   const updateMaxTokenRef = React.useRef(updateMaxToken);
 
@@ -312,6 +312,13 @@ const AppointmentForm = () => {
       setError("No valid appointment slot found. Please contact support.");
       return;
     }
+    
+    // Validate that payment is true if present is true
+    if (newAppointment.checkin && !newAppointment.paid) {
+      showWarningSnackbar("Patient cannot be marked as present without payment details");
+      setError("Please complete payment details before marking patient as present");
+      return;
+    }
 
     const newEntry = {
       id: parseInt(newAppointment.token),
@@ -477,13 +484,60 @@ const AppointmentForm = () => {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={newAppointment.checkin}
+                    checked={newAppointment.paid}
                     onChange={(e) =>
                       setNewAppointment((prev) => ({
                         ...prev,
-                        checkin: e.target.checked,
+                        paid: e.target.checked,
+                        mode: e.target.checked ? "cash" : "",
+                        fees_paid: e.target.checked ? 250 : 0,
                       }))
                     }
+                    name="payment-checkbox"
+                  />
+                }
+                label={
+                  <Typography 
+                    variant="body1" 
+                    sx={{ 
+                      fontWeight: newAppointment.paid ? 'bold' : 'normal',
+                      color: newAppointment.paid 
+                        ? 'primary.main' 
+                        : (newAppointment.checkin && !newAppointment.paid) 
+                          ? 'error.main' 
+                          : 'text.primary'
+                    }}
+                  >
+                    Payment Done
+                  </Typography>
+                }
+                sx={{ 
+                  border: newAppointment && !newAppointment.paid && newAppointment.checkin 
+                    ? '1px dashed #f44336' 
+                    : 'none',
+                  borderRadius: '4px',
+                  p: newAppointment && !newAppointment.paid && newAppointment.checkin ? 1 : 0,
+                  bgcolor: newAppointment && !newAppointment.paid && newAppointment.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
+                }}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={newAppointment.checkin}
+                    onChange={(e) => {
+                      const newCheckinState = e.target.checked;
+                      
+                      // If trying to check in but payment not done, show warning
+                      if (newCheckinState && !newAppointment.paid) {
+                        showWarningSnackbar("Please complete payment details before marking patient as present");
+                        return;
+                      }
+                      
+                      setNewAppointment((prev) => ({
+                        ...prev,
+                        checkin: newCheckinState,
+                      }))
+                    }}
                   />
                 }
                 label={
@@ -495,32 +549,6 @@ const AppointmentForm = () => {
                     }}
                   >
                     Present in Clinic
-                  </Typography>
-                }
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={newAppointment.paid}
-                    onChange={(e) =>
-                      setNewAppointment((prev) => ({
-                        ...prev,
-                        paid: e.target.checked,
-                        mode: e.target.checked ? "cash" : "",
-                        fees_paid: e.target.checked ? 250 : 0,
-                      }))
-                    }
-                  />
-                }
-                label={
-                  <Typography 
-                    variant="body1" 
-                    sx={{ 
-                      fontWeight: newAppointment.paid ? 'bold' : 'normal',
-                      color: newAppointment.paid ? 'primary.main' : 'text.primary'
-                    }}
-                  >
-                    Payment Done
                   </Typography>
                 }
               />

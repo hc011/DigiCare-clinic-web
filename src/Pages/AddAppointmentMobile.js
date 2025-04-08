@@ -28,7 +28,7 @@ export default function AddAppointmentMobile({ patients }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [suggestedToken, setSuggestedToken] = useState(1);
-  const { showSuccessSnackbar, showErrorSnackbar } = useNotification();
+  const { showSuccessSnackbar, showErrorSnackbar, showWarningSnackbar } = useNotification();
   const [mobileSearchResults, setMobileSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -108,6 +108,21 @@ export default function AddAppointmentMobile({ patients }) {
     }));
   };
 
+  const handleCheckinChange = (e) => {
+    const newCheckinState = e.target.checked;
+    
+    // If trying to check in but payment not done, show warning
+    if (newCheckinState && !formData.paid) {
+      showWarningSnackbar("Please complete payment details before marking patient as present");
+      return;
+    }
+    
+    setFormData((prev) => ({
+      ...prev,
+      checkin: newCheckinState,
+    }));
+  };
+
   const validateToken = (token) => {
     return !isNaN(token) && token > 0;
   };
@@ -124,6 +139,13 @@ export default function AddAppointmentMobile({ patients }) {
 
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       setError("First name and last name are required");
+      setLoading(false);
+      return;
+    }
+    
+    // Validate that payment is true if present is true
+    if (formData.checkin && !formData.paid) {
+      showWarningSnackbar("Patient cannot be marked as present without payment details");
       setLoading(false);
       return;
     }
@@ -354,17 +376,44 @@ export default function AddAppointmentMobile({ patients }) {
         </Box>
 
         {/* Check-in/Payment Row */}
-        <Box sx={{ display: "flex", gap: 1, mb: 1 }}>
+        <Box sx={{ display: "flex", gap:1, mb: 1, justifyContent: "space-between" }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={formData.paid}
+                onChange={handlePaidCheckboxChange}
+                name="payment-checkbox-mobile"
+              />
+            }
+            label={
+              <Typography 
+                variant="body1" 
+                sx={{ 
+                  fontWeight: formData.paid ? 'bold' : 'normal',
+                  color: formData.paid 
+                    ? 'primary.main' 
+                    : (formData.checkin && !formData.paid) 
+                      ? 'error.main' 
+                      : 'text.primary'
+                }}
+              >
+                Payment
+              </Typography>
+            }
+            sx={{ 
+              border: formData && !formData.paid && formData.checkin 
+                ? '1px dashed #f44336' 
+                : 'none',
+              borderRadius: '4px',
+              p: formData && !formData.paid && formData.checkin ? 0.5 : 0,
+              bgcolor: formData && !formData.paid && formData.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
+            }}
+          />
           <FormControlLabel
             control={
               <Checkbox
                 checked={formData.checkin}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    checkin: e.target.checked,
-                  }))
-                }
+                onChange={handleCheckinChange}
               />
             }
             label={
@@ -376,25 +425,6 @@ export default function AddAppointmentMobile({ patients }) {
                 }}
               >
                 Present in Clinic
-              </Typography>
-            }
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={formData.paid}
-                onChange={handlePaidCheckboxChange}
-              />
-            }
-            label={
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  fontWeight: formData.paid ? 'bold' : 'normal',
-                  color: formData.paid ? 'primary.main' : 'text.primary'
-                }}
-              >
-                Payment Done
               </Typography>
             }
           />
