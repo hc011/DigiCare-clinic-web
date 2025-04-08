@@ -95,7 +95,6 @@ const QueueContainer = ({
 
   const handleConfirmDrag = async () => {
     setIsShifting(true);
-
     const sortedPatients = patients.sort((a, b) => a.position - b.position);
     const activeIndex = sortedPatients.findIndex(
       (p) => p.appointment?.appointment_id === dragActiveId
@@ -119,10 +118,10 @@ const QueueContainer = ({
       // Dragging DOWN
       // If dropped at the very bottom, special case
       if (overIndex === mergedGroup.length - 1) {
-        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position + 1;
+        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position;
       } else {
         // Position between the drop target and the item before it
-        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position + 1;
+        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position;
       }
     }
     
