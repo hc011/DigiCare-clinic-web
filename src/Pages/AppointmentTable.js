@@ -252,6 +252,7 @@ export default function AppointmentTable() {
 
   const [editModalOpen, setEditModalOpen] = React.useState(false);
   const [selectedAppointment, setSelectedAppointment] = React.useState(null);
+  const [originalCheckinState, setOriginalCheckinState] = React.useState(false);
   const [editMobileSearchResults, setEditMobileSearchResults] = useState([]);
   const [isEditSearching, setIsEditSearching] = useState(false);
   
@@ -670,6 +671,8 @@ export default function AppointmentTable() {
       fees_paid: params.row.fees_paid 
     };
     
+    // Store the original checkin state
+    setOriginalCheckinState(params.row.checkin);
     setSelectedAppointment(appointmentData);
     setEditModalOpen(true);
     
@@ -679,6 +682,7 @@ export default function AppointmentTable() {
   const handleEditModalClose = () => {
     setEditModalOpen(false);
     setSelectedAppointment(null);
+    setOriginalCheckinState(false);
   };
 
   const handleInputChange = (e) => {
@@ -1108,6 +1112,7 @@ export default function AppointmentTable() {
                       checkin: e.target.checked,
                     }))
                   }
+                  disabled={originalCheckinState}
                 />
               }
               label={

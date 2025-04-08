@@ -124,6 +124,7 @@ export default function MobileAppointmentTable() {
   // State for editing appointment
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [originalCheckinState, setOriginalCheckinState] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState(null);
   
@@ -210,6 +211,8 @@ export default function MobileAppointmentTable() {
       lastName: lastName
     };
     
+    // Store the original checkin state to determine if it was changed during this edit session
+    setOriginalCheckinState(row.checkin);
     setSelectedAppointment(formattedRow);
     setEditModalOpen(true);
   };
@@ -219,6 +222,7 @@ export default function MobileAppointmentTable() {
     setEditModalOpen(false);
     setSelectedAppointment(null);
     setUpdateError(null);
+    setOriginalCheckinState(false);
   };
 
   // Handle edit form submission
@@ -713,6 +717,7 @@ export default function MobileAppointmentTable() {
                         checkin: e.target.checked,
                       }))
                     }
+                    disabled={originalCheckinState}
                     size="small"
                   />
                 }
