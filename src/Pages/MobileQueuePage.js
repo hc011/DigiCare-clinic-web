@@ -122,7 +122,7 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
   const queueStats = {
     total: queueList.filter(p => p.appointment !== null).length,
     pending: queueList.filter(p => p.appointment !== null).filter(p => p.status === "pending").length,
-    checkedIn: queueList.filter(p => p.appointment !== null).filter(p => p.status === "pending").filter(p => p.checkin === true).length,
+    checkedIn: queueList.filter(p => p.appointment !== null).filter(p => p.status === "pending").filter(p => p.type === "patient").filter(p => p.position !== -1).filter(p => p.checkin === true).length,
   };
 
   // If not mobile, display a message suggesting to use desktop view

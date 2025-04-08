@@ -23,16 +23,16 @@ export default function StatisticsCard({ patients, currentPatient, loading, queu
           : 0,
       patientsWaiting:
         queueList.length !== 0
-          ? queueList.filter(p => p.appointment !== null).filter(p => p.status == "pending").filter(p => p.checkin === true).length
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status === "pending").filter(p => p.type === "patient").filter(p => p.position !== -1).filter(p => p.checkin === true).length
           : 0,
       totalCancelled: queueList.filter((p) => p.status === "cancelled").length,
       patientsPending:
         queueList.length !== 0
-          ? queueList.filter(p => p.appointment !== null).filter(p => p.status == "pending").length
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status === "pending").length
           : 0,
       patientsDoneTillNow:
         queueList.length !== 0
-          ? queueList.filter(p => p.appointment !== null).filter(p => p.status == "done_checkup").length
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status === "done_checkup").length
           : 0,
     };
 
