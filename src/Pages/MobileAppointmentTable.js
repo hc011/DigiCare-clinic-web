@@ -65,9 +65,15 @@ const getStatusColor = (status) => {
 };
 
 // Function to generate display rows with placeholders for missing tokens
-function generateDisplayRows(actualRows) {
+function generateDisplayRows(actualRows, isSearchActive) {
   if (actualRows.length === 0) return [];
 
+  // If we're searching, just return the actual filtered rows without placeholders
+  if (isSearchActive) {
+    return actualRows;
+  }
+
+  // Add placeholders only when not searching
   const tokens = actualRows.map((row) => parseInt(row.token) || 0);
   const minToken = Math.min(...tokens);
   const maxToken = Math.max(...tokens);
@@ -514,8 +520,8 @@ export default function MobileAppointmentTable() {
 
   // Generate display rows with placeholders for missing tokens
   const displayedRows = useMemo(() => 
-    generateDisplayRows(filteredAppointments), 
-    [filteredAppointments]
+    generateDisplayRows(filteredAppointments, !!searchQuery), 
+    [filteredAppointments, searchQuery]
   );
 
   // Render functions
