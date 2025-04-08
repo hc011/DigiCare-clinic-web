@@ -10,6 +10,7 @@ import MedicalInformationIcon from "@mui/icons-material/MedicalInformation";
 import TimerIcon from "@mui/icons-material/Timer";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import QueueIcon from "@mui/icons-material/PeopleAlt";
+import SettingsIcon from "@mui/icons-material/Settings";
 
 // Create a more compact version of BottomNavigationAction
 const CompactBottomNavigationAction = styled(BottomNavigationAction)(({ theme }) => ({
@@ -35,6 +36,7 @@ export default function BottomNavigator() {
     "/mobile-queue": 0,
     "/add-appointment": 1,
     "/mobile-appointments": 2,
+    "/manage-slot": 3,
   };
 
   const [value, setValue] = React.useState(pathToIndex[location.pathname] || 0);
@@ -58,7 +60,7 @@ export default function BottomNavigator() {
         }}
         onChange={(event, newValue) => {
           setValue(newValue);
-          const paths = ["/mobile-queue", "/add-appointment", "/mobile-appointments"];
+          const paths = ["/mobile-queue", "/add-appointment", "/mobile-appointments", "/manage-slot"];
           navigate(paths[newValue]);
         }}
       >
@@ -73,6 +75,10 @@ export default function BottomNavigator() {
         <CompactBottomNavigationAction
           label="Appointments"
           icon={<CalendarTodayIcon />}
+        />
+        <CompactBottomNavigationAction
+          label="Manage"
+          icon={<SettingsIcon />}
         />
       </BottomNavigation>
     </Box>

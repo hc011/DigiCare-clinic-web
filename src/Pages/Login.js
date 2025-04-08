@@ -20,7 +20,7 @@ import PersonOutlineIcon from "@mui/icons-material/PersonOutline";
 import LockIcon from "@mui/icons-material/Lock";
 import { Navigate } from "react-router-dom";
 import { useNotification } from "../context/NotificationContext";
-
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 import "./Login.css";
 
 const Login = () => {
@@ -32,6 +32,7 @@ const Login = () => {
   const isMobile = window.innerWidth <= 768;
 
   const { showErrorSnackbar, showNotification } = useNotification();
+  const { fetchCabinData } = useCheckupCabin();
 
   const [credential, setCredential] = useState({
     username: "",
@@ -73,7 +74,7 @@ const Login = () => {
         localStorage.setItem("user", JSON.stringify(response));
         
         setUser(response);
-        
+        fetchCabinData(response.checkupcabindata[0].id);
         const isMobileDevice = window.innerWidth <= 768;
         navigate(isMobileDevice ? "/mobile-queue" : "/");
       } else {

@@ -24,6 +24,7 @@ import { Navigate } from "react-router-dom";
 import AppointmentForm from "./components/AppointmentForm";
 import AppointmentDetails from "./Pages/AppointmentDetails";
 import webSocketService from "./services/websocketService";
+import ManageSlot from "./Pages/ManageSlot";
 
 import {
   fetchPatients,
@@ -33,23 +34,25 @@ import {
 import { ThemeProvider } from '@mui/material/styles';
 import { theme } from './theme/theme';
 import Dashboard from './Pages/Dashboard';
-import { getLatestCabinSlot, getCabinInfoFromUser } from './utils/dateUtils';
+import { getCabinInfo} from './utils/dateUtils';
 import PatientInfoPage from './Pages/PatientInfoPage';
 import ConsultationPage from './Pages/ConsultationPage';
 import PDFViewer from './components/PDFViewer';
 import usePDFViewer from './hooks/usePDFViewer';
+import { useCheckupCabin } from './context/CheckupCabinContext';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const App = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   
-  // Extract cabin information using the new utility function
-  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
+  // Get values directly from the context
+  const { isInitialized, cabinId, selectedSlot } = useCheckupCabin();
   
   const isMobile = window.innerWidth <= 768;
   const [currentPosition, setCurrentPosition] = useState(1);
   const [patients, setPatients] = useState([]);
+  const [queueList, setQueueList] = useState([]);
   const [currentPatient, setCurrentPatient] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentCabinSlot, setCurrentCabinSlot] = useState("2024-03-10T09:00:00.000Z");
@@ -71,9 +74,7 @@ const App = () => {
     // Handle visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('Tab is now visible, checking WebSocket connection state');
-        console.log('Current wasClosedDueToInactivity flag:', webSocketService.wasClosedDueToInactivity);
-        
+        console.log('Tab is now visible, checking WebSocket connection state');        
         // Use the new connection checking method that handles inactivity reconnection
         const { shouldReload, connectionState } = webSocketService.checkConnection();
         console.log('checkConnection result:', { shouldReload, connectionState });
@@ -141,14 +142,30 @@ const App = () => {
         if (queueData) {
           console.log("Processing queue update:", queueData);
           
-          
-          // Update patient state
-          setPatients(prevPatients => {
-            // Find if the updated patient already exists in our list
+          setQueueList(prevQueueList => {
+            const existingPatientIndex = prevQueueList.findIndex(
+              p => p.appointment?.appointment_id === queueData.appointment?.appointment_id
+            );
+            if(existingPatientIndex !== -1){
+              const updatedPatients = [...prevQueueList];
+              updatedPatients[existingPatientIndex] = {
+                ...updatedPatients[existingPatientIndex],
+                ...queueData
+              };
+              return updatedPatients;
+            } else {
+              return [...prevQueueList, queueData];
+            }
+          })
+            // Update patient state
+            setPatients(prevPatients => {
+              // Find if the updated patient already exists in our list
+              if(queueData.appointment === null){
+                return prevPatients.filter(p => p.type == "patient");
+              }
             const existingPatientIndex = prevPatients.findIndex(
               p => p.appointment?.appointment_id === queueData.appointment?.appointment_id
             );
-            
             // If appointment data exists in the queue update
             if (queueData.appointment) {
               const updatedPatient = {
@@ -157,9 +174,10 @@ const App = () => {
                 status: queueData.status,
                 paid: queueData.paid,
                 checkin: queueData.checkin,
-                late: queueData.late
+                late: queueData.late,
+                type: queueData.type
               };
-              
+
               if (existingPatientIndex !== -1) {
                 // Update existing patient
                 const updatedPatients = [...prevPatients];
@@ -167,14 +185,14 @@ const App = () => {
                   ...updatedPatients[existingPatientIndex],
                   ...updatedPatient
                 };
-                return updatedPatients;
+                return updatedPatients.filter(p => p.type == "patient");
               } else {
                 // Add new patient to the list
-                return [...prevPatients, updatedPatient];
+                return [...prevPatients, updatedPatient].filter(p => p.type == "patient");
               }
             }
             
-            return prevPatients;
+            return prevPatients.filter(p => p.type == "patient");
           });
         }
         
@@ -197,54 +215,16 @@ const App = () => {
     };
   }, [cabinId, selectedSlot, currentUser]);
 
-  useEffect(() => {
-    if (currentPosition) {
-      console.log("Current position  ---- :", currentPosition);
-    }
-  }, [currentPosition]);
-
-  // Setup WebSocket subscriber for cabinslot updates
-  useEffect(() => {
-    if (!cabinId || !selectedSlot || !currentUser) return;
-
-    console.log("Setting up WebSocket subscription for cabinslot updates in App");
-    
-    // Subscribe to cabinslot updates
-    const cabinslotUnsubscribe = webSocketService.subscribe('cabinslot', (response) => {
-      console.log("Received cabinslot update via WebSocket in App:", response);
-      try {
-        let cabinslotData = null;
-
-        // Handle different possible formats
-        if (response.data && response.data.type === "cabinslot_update" && response.data.data) {
-          cabinslotData = response.data.data;
-        } else if (response.data && response.data.type === "queue_update" && response.data.data && response.data.data.cabinslot) {
-          cabinslotData = response.data.data.cabinslot;
-        } else if (response.type === "cabinslot" && response.data) {
-          cabinslotData = response.data;
-        }
-        
-        if (cabinslotData && cabinslotData.current_number !== undefined) {
-          console.log("Updating current position from cabinslot to:", cabinslotData.current_number);
-          setCurrentPosition(parseInt(cabinslotData.current_number));
-        }
-      } catch (error) {
-        console.error("Error processing WebSocket cabinslot data in App:", error);
-      }
-    });
-
-    return () => {
-      cabinslotUnsubscribe();
-    };
-  }, [cabinId, selectedSlot, currentUser]);
-
+  // Initial data loading
   useEffect(() => {
     const fetchInitialData = async () => {
       setLoading(true);
-      try {        
+      console.log("Fetching initial data with:", cabinId, selectedSlot);
+      try {            
         const patients = await fetchPatients(cabinId, selectedSlot);
-        console.log(patients);
-        setPatients(patients);
+        console.log("Fetched patients:", patients);
+        setQueueList(patients);
+        setPatients(patients.filter(p => p.type == "patient").filter(p => p.position !== -1));
         
         const { current_number } = await fetchCurrentPosition(cabinId, selectedSlot);
         setCurrentPosition(current_number);
@@ -255,10 +235,14 @@ const App = () => {
       }
     };
 
-    if (cabinId && selectedSlot) {
+    // Only fetch initial data when context is initialized and we have the required values
+    if (isInitialized && cabinId && selectedSlot) {
+      console.log("CheckupCabinContext is initialized with valid cabin data, running fetchInitialData");
       fetchInitialData();
+    } else if (isInitialized) {
+      console.log("CheckupCabinContext is initialized but missing required data - cabinId:", cabinId, "selectedSlot:", selectedSlot);
     }
-  }, [cabinId, selectedSlot, currentUser]);
+  }, [isInitialized, cabinId, selectedSlot]);
 
   useEffect(() => {
     if (patients.length > 0 && currentPosition !== null) {
@@ -398,9 +382,10 @@ const App = () => {
                       element={
                         <PrivateRoute>
                           <Home
+                            queueList={queueList}
                             currentPosition={currentPosition}
                             patients={patients}
-                            setPatients={(patients) => setPatients(patients)}
+                            setPatients={(patients) => setPatients(patients.filter(p => p.type == "patient").filter(p => p.position !== -1))}
                             loading={loading}
                           />
                         </PrivateRoute>
@@ -419,10 +404,19 @@ const App = () => {
                       element={
                         <PrivateRoute>
                           <MobileQueuePage 
+                            queueList={queueList}
                             patientsData={patients} 
                             currentPositionData={currentPosition} 
                             loading={loading}
                           />
+                        </PrivateRoute>
+                      }
+                    />
+                    <Route
+                      path="/manage-slot"
+                      element={
+                        <PrivateRoute>
+                          <ManageSlot />
                         </PrivateRoute>
                       }
                     />

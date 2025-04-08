@@ -139,7 +139,7 @@ export default function AddAppointmentMobile({ patients }) {
         cabinId: cabinId,
         slot: selectedSlot,
         name: `${formData.firstName} ${formData.lastName}`.trim().toUpperCase(),
-        token: formData.token,
+        token: parseInt(formData.token),
         paid: formData.paid,
         checkin: formData.checkin,
         age: formData.age,
@@ -252,6 +252,7 @@ export default function AddAppointmentMobile({ patients }) {
         <TextField
           fullWidth
           label="Token Number"
+          disabled={loading}
           name="token"
           type="number"
           value={formData.token}

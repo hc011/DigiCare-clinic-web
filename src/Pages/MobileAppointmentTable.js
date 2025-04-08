@@ -30,6 +30,8 @@ import {
   Autocomplete,
   Alert,
   Skeleton,
+  Grid,
+  Divider,
 } from "@mui/material";
 import {
   updateAppointmentDetails,
@@ -39,9 +41,9 @@ import {
 } from "../services/api";
 import "./MobileAppointmentTable.css";
 import SearchIcon from "@mui/icons-material/Search";
-import { CheckCircle, Cancel, Edit } from "@mui/icons-material";
+import { CheckCircle, Cancel, Edit, BarChart } from "@mui/icons-material";
 import CloseIcon from "@mui/icons-material/Close";
-import { getCabinInfoFromUser } from "../utils/dateUtils";
+import { getCabinInfo } from "../utils/dateUtils";
 import webSocketService from "../services/websocketService";
 import { useNotification } from "../context/NotificationContext";
 
@@ -103,7 +105,7 @@ function generateDisplayRows(actualRows) {
 
 export default function MobileAppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfoFromUser(user);
+  const { cabinId, selectedSlot } = getCabinInfo(user);
   
   // State for appointment data
   const [appointments, setAppointments] = useState([]);
@@ -132,6 +134,9 @@ export default function MobileAppointmentTable() {
   const [editMobileSearchResults, setEditMobileSearchResults] = useState([]);
   const [isEditSearching, setIsEditSearching] = useState(false);
   
+  // State for summary modal
+  const [summaryModalOpen, setSummaryModalOpen] = useState(false);
+  
   // Memoized cabin info for appointments
   const cabinInfo = useMemo(() => {
     if (user && user.checkupcabindata && user.checkupcabindata.length > 0) {
@@ -142,6 +147,47 @@ export default function MobileAppointmentTable() {
     }
     return { cabinNumber: "", doctorName: "Dr." };
   }, [user]);
+
+  // Calculate summary statistics from appointments
+  const summaryStats = useMemo(() => {
+    // Payment summary
+    const totalCollection = appointments.reduce((sum, apt) => sum + (apt.fees_paid || 0), 0);
+    const cashCollection = appointments
+      .filter(apt => apt.mode === "cash")
+      .reduce((sum, apt) => sum + (apt.fees_paid || 0), 0);
+    const onlineCollection = appointments
+      .filter(apt => apt.mode === "online")
+      .reduce((sum, apt) => sum + (apt.fees_paid || 0), 0);
+      
+    // Patient summary
+    const totalPatients = appointments.length;
+    const completedPatients = appointments.filter(apt => 
+      apt.status === "done" || apt.status === "done_checkup"
+    ).length;
+    const pendingPatients = appointments.filter(apt => apt.status === "pending").length;
+    const cancelledPatients = appointments.filter(apt => apt.status === "cancelled").length;
+    const presentPatients = appointments.filter(apt => apt.checkin === true).length;
+    
+    return {
+      payment: {
+        totalCollection,
+        cashCollection,
+        onlineCollection
+      },
+      patients: {
+        totalPatients,
+        completedPatients,
+        pendingPatients,
+        cancelledPatients,
+        presentPatients
+      }
+    };
+  }, [appointments]);
+
+  // Toggle summary modal
+  const handleSummaryModalToggle = () => {
+    setSummaryModalOpen(!summaryModalOpen);
+  };
 
   // Handler to edit a specific appointment row
   const handleEditClick = (row) => {
@@ -974,6 +1020,211 @@ export default function MobileAppointmentTable() {
     </Dialog>
   );
 
+  // Render summary modal
+  const renderSummaryModal = () => (
+    <Dialog
+      open={summaryModalOpen}
+      onClose={handleSummaryModalToggle}
+      fullWidth
+      maxWidth="sm"
+      PaperProps={{
+        sx: {
+          width: { xs: "95vw", sm: "85vw" },
+          maxWidth: { xs: "95vw", sm: "85vw" },
+          borderRadius: 2,
+          p: { xs: 1.5, sm: 2 },
+          m: 0,
+          overflowY: "auto"
+        }
+      }}
+    >
+      <Box sx={{ 
+        position: "relative", 
+        p: 0, 
+        pb: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }}>
+        <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 600 }}>
+          Appointments Summary
+        </Typography>
+        <IconButton
+          aria-label="close"
+          onClick={handleSummaryModalToggle}
+          sx={{
+            color: (theme) => theme.palette.grey[500],
+            padding: '4px',
+          }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ p: 0, pt: 1 }}>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle1" sx={{ 
+            fontSize: '0.95rem', 
+            fontWeight: 600, 
+            mb: 1,
+            color: 'primary.main' 
+          }}>
+            Payment Summary
+          </Typography>
+          <Divider sx={{ mb: 1.5 }} />
+          <Grid container spacing={2}>
+            <Grid item xs={4}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Total
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  ₹{summaryStats.payment.totalCollection}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={4}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Cash
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  ₹{summaryStats.payment.cashCollection}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={4}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Online
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  ₹{summaryStats.payment.onlineCollection}
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Box>
+        
+        <Box>
+          <Typography variant="subtitle1" sx={{ 
+            fontSize: '0.95rem', 
+            fontWeight: 600, 
+            mb: 1,
+            color: 'primary.main' 
+          }}>
+            Patient Summary
+          </Typography>
+          <Divider sx={{ mb: 1.5 }} />
+          <Grid container spacing={2}>
+            <Grid item xs={6} sm={3}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Total
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  {summaryStats.patients.totalPatients}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Completed
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  {summaryStats.patients.completedPatients}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Pending
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  {summaryStats.patients.pendingPatients}
+                </Typography>
+              </Box>
+            </Grid>
+            <Grid item xs={6} sm={3}>
+              <Box sx={{ 
+                bgcolor: 'background.paper', 
+                p: 1.5, 
+                borderRadius: 1,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography variant="caption" sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+                  Cancelled
+                </Typography>
+                <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 700 }}>
+                  {summaryStats.patients.cancelledPatients}
+                </Typography>
+              </Box>
+            </Grid>
+          </Grid>
+        </Box>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <Box sx={{ 
       padding: { xs: '6px 0px 80px 0px', sm: 2 },
@@ -981,25 +1232,48 @@ export default function MobileAppointmentTable() {
       maxWidth: '100%',
       overflowX: 'hidden'
     }}>
-
-      <TextField
-        fullWidth
-        variant="outlined"
-        placeholder="Search patients..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        margin="normal"
-        size="small"
-        sx={{ px: { xs: 1.5, sm: 0 }, m: 0, width: "95%", height: "1rem", mt: 0 }}
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon fontSize="small" />
-            </InputAdornment>
-          ),
-          style: { fontSize: '0.9rem' }
-        }}
-      />
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center',
+        gap: 1, 
+        px: { xs: 1.5, sm: 0 }
+      }}>
+        <TextField
+          variant="outlined"
+          placeholder="Search patients..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          size="small"
+          sx={{ 
+            m: 0, 
+            flexGrow: 1,
+            height: "1rem", 
+            mt: 0 
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            style: { fontSize: '0.9rem' }
+          }}
+        />
+        <IconButton
+          color="primary"
+          size="small"
+          onClick={handleSummaryModalToggle}
+          sx={{ 
+            p: 1,
+            bgcolor: 'rgba(25, 118, 210, 0.08)',
+            '&:hover': {
+              bgcolor: 'rgba(25, 118, 210, 0.15)',
+            }
+          }}
+        >
+          <BarChart fontSize="small" />
+        </IconButton>
+      </Box>
 
       {loading ? (
         <Box sx={{ px: { xs: 1.5, sm: 0 }, mt: 2 }}>
@@ -1197,6 +1471,9 @@ export default function MobileAppointmentTable() {
       
       {/* Cancel Confirmation Dialog */}
       {renderCancelConfirmationDialog()}
+
+      {/* Summary Modal */}
+      {renderSummaryModal()}
     </Box>
   );
 }

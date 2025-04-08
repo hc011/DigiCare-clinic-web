@@ -91,20 +91,40 @@ const QueueContainer = ({
   const handleConfirmDrag = async () => {
     setIsShifting(true);
     
-    const overPatient = mergedGroup.find(
+    // Find the indices in the current state
+    const activeIndex = mergedGroup.findIndex(
       (p) => p.appointment?.appointment_id === dragOverId
     );
+    const overIndex = mergedGroup.findIndex(
+      (p) => p.appointment?.appointment_id === dragActiveId
+    );
     
-    if (!overPatient) {
-      console.error("Could not find target patient for position update");
-      setIsShifting(false);
-      setConfirmDrag(false);
-      return;
+    let newPosition;
+    debugger;
+    // Determine if dragging up or down
+    if (activeIndex > overIndex) {
+      // Dragging UP
+      // If dropped at the very top, special case
+      if (overIndex === 0) {
+        newPosition = patients.sort((a, b) => a.position - b.position)[0].position - 1;
+      } else {
+        // Position between the drop target and the item after it
+        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position - 1;
+      }
+    } else {
+      // Dragging DOWN
+      // If dropped at the very bottom, special case
+      if (overIndex === mergedGroup.length - 1) {
+        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position + 1;
+      } else {
+        // Position between the drop target and the item before it
+        newPosition = patients.sort((a, b) => a.position - b.position)[overIndex].position + 1;
+      }
     }
     
     await shufflePosition({
       appointment_id: dragActiveId,
-      new_position: overPatient.position,
+      new_position: newPosition,
     });
     
     setIsShifting(false);

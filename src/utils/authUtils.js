@@ -1,5 +1,5 @@
 import { cancelAllRequests } from "./axiosInstance";
-
+import { logout } from "../services/authService";
 /**
  * Handles automatic logout with proper error messaging
  * Stores the logout reason in sessionStorage to be displayed on the login page
@@ -21,8 +21,7 @@ export const handleAutoLogout = (message, severity = "error") => {
     // Cancel any pending requests
     cancelAllRequests();
     
-    // Redirect to login page
-    window.location.replace("/login");
+    logout();    
   }
 };
 

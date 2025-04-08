@@ -3,7 +3,7 @@ import { Card, CardContent, Typography, Box, ListItem } from "@mui/material";
 import { useState, useEffect } from "react";
 import Skeleton from "@mui/material/Skeleton";
 
-export default function StatisticsCard({ patients, currentPatient, loading }) {
+export default function StatisticsCard({ patients, currentPatient, loading, queueList }) {
   const [stats, setStats] = useState({
     totalPatientsToday: 0,
     patientsMarkedLate: 0,
@@ -18,29 +18,50 @@ export default function StatisticsCard({ patients, currentPatient, loading }) {
 
   useEffect(() => {
 
+    // const updatedStats = {
+    //   totalPatientsToday: patients.length,
+    //   patientsMarkedLate:
+    //     patients.length !== 0
+    //       ? patients.filter((p) => p.late === true).length
+    //       : 0,
+    //   patientsDoneTillNow: patients.filter((p) => p.status === "done_checkup")
+    //     .length,
+    //   averageCheckupTime: "12 mins",
+    //   patientsWaiting:
+    //     patients.length !== 0
+    //       ? patients.filter(
+    //           (p) => p.status !== "done_checkup" && p.status !== "cancelled"
+    //         ).length
+    //       : 0,
+    //   estimatedClosingTime: "5:30 PM",
+    //   mostCommonIssue: "Flu",
+    //   doctorAvailability: 3,
+    //   totalCancelled: patients.filter((p) => p.status === "cancelled").length,
+    // };
+
     const updatedStats = {
-      totalPatientsToday: patients.length,
+      totalPatientsToday: queueList.filter(p => p.appointment !== null).length,
       patientsMarkedLate:
-        patients.length !== 0
-          ? patients.filter((p) => p.late === true).length
+        queueList.length !== 0
+          ? queueList.filter(p => p.appointment !== null).filter((p) => p.late === true).length
           : 0,
-      patientsDoneTillNow: patients.filter((p) => p.status === "done_checkup")
+      patientsDoneTillNow: queueList.filter(p => p.appointment !== null).filter((p) => p.status === "done_checkup")
         .length,
       averageCheckupTime: "12 mins",
       patientsWaiting:
-        patients.length !== 0
-          ? patients.filter(
+        queueList.length !== 0
+          ? queueList.filter(p => p.appointment !== null).filter(
               (p) => p.status !== "done_checkup" && p.status !== "cancelled"
             ).length
           : 0,
       estimatedClosingTime: "5:30 PM",
       mostCommonIssue: "Flu",
       doctorAvailability: 3,
-      totalCancelled: patients.filter((p) => p.status === "cancelled").length,
+      totalCancelled: queueList.filter((p) => p.status === "cancelled").length,
     };
 
     setStats(updatedStats);
-  }, [currentPatient, patients]);
+  }, [currentPatient, patients, queueList]);
 
   return (
     <Card sx={styles.card}>

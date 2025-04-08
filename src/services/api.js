@@ -514,3 +514,43 @@ export const createSlot = async (cabinId, currentSlot, payload) => {
     throw error;
   }
 };
+
+export const fetchCabinSlots = async(cabinId) => {
+  try {
+    const response = await axiosInstance.get(
+      `/queueinfo/cabinslots/list/${cabinId}`,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching cabin slots:", error);
+    throw error;
+  }
+};
+
+export const fetchExpiredTokens = async(cabinId, slot) => {
+  try {
+    const response = await axiosInstance.get(
+      `/queueinfo/expired-tokens/${cabinId}/${slot}`,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error fetching expired tokens:", error);
+    throw error;
+  }
+};
+
+export const updateSlot = async(payload) => {
+  try {
+    const response = await axiosInstance.put(
+      `/queueinfo/cabinslots/update/`,
+      payload,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch (error) {
+    console.error("Error managing slot:", error);
+    throw error;
+  }
+};
