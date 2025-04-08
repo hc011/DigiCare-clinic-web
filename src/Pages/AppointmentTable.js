@@ -242,7 +242,7 @@ export default function AppointmentTable() {
     pageSize: 50,
   });
 
-  const { showSuccessSnackbar, showErrorSnackbar } = useNotification();
+  const { showSuccessSnackbar, showErrorSnackbar, showWarningSnackbar } = useNotification();
 
   const [mobileSearchResults, setMobileSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -844,6 +844,19 @@ export default function AppointmentTable() {
   const handleConfirmEdit = async () => {
     if (!selectedAppointment) return;
     
+    // Validate that payment is true if present is true
+    if (selectedAppointment.checkin && !selectedAppointment.paid) {
+      showWarningSnackbar("Please complete payment details.", 3000);
+      
+      // Focus the payment checkbox by setting a temporary highlight 
+      const paymentCheckbox = document.querySelector('[name="payment-checkbox"]');
+      if (paymentCheckbox) {
+        paymentCheckbox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      
+      return;
+    }
+    
     const updateData = {
       token: selectedAppointment.token,
       appointment_id: selectedAppointment.appointment_id,
@@ -1105,13 +1118,60 @@ export default function AppointmentTable() {
             <FormControlLabel
               control={
                 <Checkbox
-                  checked={selectedAppointment.checkin}
+                  checked={selectedAppointment.paid}
                   onChange={(e) =>
                     setSelectedAppointment((prev) => ({
                       ...prev,
-                      checkin: e.target.checked,
+                      paid: e.target.checked,
+                      mode: e.target.checked ? "cash" : "",
+                      fees_paid: e.target.checked ? prev.fees_paid || 250 : 0,
                     }))
                   }
+                  name="payment-checkbox"
+                />
+              }
+              label={
+                <Typography 
+                  variant="body1" 
+                  sx={{ 
+                    fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
+                    color: selectedAppointment.paid 
+                      ? 'primary.main' 
+                      : (selectedAppointment.checkin && !selectedAppointment.paid) 
+                        ? 'error.main' 
+                        : 'text.primary'
+                  }}
+                >
+                  Payment Done
+                </Typography>
+              }
+              sx={{ 
+                border: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin 
+                  ? '1px dashed #f44336' 
+                  : 'none',
+                borderRadius: '4px',
+                p: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 1 : 0,
+                bgcolor: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
+              }}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={selectedAppointment.checkin}
+                  onChange={(e) => {
+                    const newCheckinState = e.target.checked;
+                    
+                    // If trying to check in but payment not done, show warning
+                    if (newCheckinState && !selectedAppointment.paid) {
+                      showWarningSnackbar("Please complete payment details before marking patient as present", 3000);
+                      return;
+                    }
+                    
+                    setSelectedAppointment((prev) => ({
+                      ...prev,
+                      checkin: newCheckinState,
+                    }))
+                  }}
                   disabled={originalCheckinState}
                 />
               }
@@ -1124,32 +1184,6 @@ export default function AppointmentTable() {
                   }}
                 >
                   Present in Clinic
-                </Typography>
-              }
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={selectedAppointment.paid}
-                  onChange={(e) =>
-                    setSelectedAppointment((prev) => ({
-                      ...prev,
-                      paid: e.target.checked,
-                      mode: e.target.checked ? "cash" : "",
-                      fees_paid: e.target.checked ? prev.fees_paid || 250 : 0,
-                    }))
-                  }
-                />
-              }
-              label={
-                <Typography 
-                  variant="body1" 
-                  sx={{ 
-                    fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
-                    color: selectedAppointment.paid ? 'primary.main' : 'text.primary'
-                  }}
-                >
-                  Payment Done
                 </Typography>
               }
             />

@@ -119,7 +119,7 @@ export default function MobileAppointmentTable() {
   const [error, setError] = useState(null);
   
   // Notification context for showing messages
-  const { showErrorSnackbar, showSuccessSnackbar } = useNotification();
+  const { showErrorSnackbar, showSuccessSnackbar, showWarningSnackbar } = useNotification();
   
   // State for editing appointment
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -228,6 +228,12 @@ export default function MobileAppointmentTable() {
   // Handle edit form submission
   const handleEditSubmit = async () => {
     if (!selectedAppointment) return;
+    
+    // Validate that payment is true if present is true
+    if (selectedAppointment.checkin && !selectedAppointment.paid) {
+      showWarningSnackbar("Please complete payment details.", 3000);
+      return;
+    }
     
     setIsUpdating(true);
     setUpdateError(null);
@@ -710,33 +716,6 @@ export default function MobileAppointmentTable() {
               <FormControlLabel
                 control={
                   <Checkbox
-                    checked={selectedAppointment.checkin}
-                    onChange={(e) =>
-                      setSelectedAppointment((prev) => ({
-                        ...prev,
-                        checkin: e.target.checked,
-                      }))
-                    }
-                    disabled={originalCheckinState}
-                    size="small"
-                  />
-                }
-                label={
-                  <Typography 
-                    variant="body2" 
-                    sx={{ 
-                      fontWeight: selectedAppointment.checkin ? 'bold' : 'normal',
-                      color: selectedAppointment.checkin ? 'primary.main' : 'text.primary',
-                      fontSize: '0.85rem'
-                    }}
-                  >
-                    Present
-                  </Typography>
-                }
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
                     checked={selectedAppointment.paid}
                     onChange={(e) => {
                       const isPaid = e.target.checked;
@@ -757,6 +736,7 @@ export default function MobileAppointmentTable() {
                       }));
                     }}
                     size="small"
+                    name="payment-checkbox-mobile"
                   />
                 }
                 label={
@@ -764,11 +744,58 @@ export default function MobileAppointmentTable() {
                     variant="body2" 
                     sx={{ 
                       fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
-                      color: selectedAppointment.paid ? 'primary.main' : 'text.primary',
+                      color: selectedAppointment.paid 
+                        ? 'primary.main' 
+                        : (selectedAppointment.checkin && !selectedAppointment.paid) 
+                          ? 'error.main' 
+                          : 'text.primary',
                       fontSize: '0.85rem'
                     }}
                   >
                     Payment
+                  </Typography>
+                }
+                sx={{ 
+                  border: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin 
+                    ? '1px dashed #f44336' 
+                    : 'none',
+                  borderRadius: '4px',
+                  p: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 0.5 : 0,
+                  bgcolor: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
+                }}
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={selectedAppointment.checkin}
+                    onChange={(e) => {
+                      const newCheckinState = e.target.checked;
+                      
+                      // If trying to check in but payment not done, show warning
+                      if (newCheckinState && !selectedAppointment.paid) {
+                        showWarningSnackbar("Please complete payment details before marking patient as present", 3000);
+                        return;
+                      }
+                      
+                      setSelectedAppointment((prev) => ({
+                        ...prev,
+                        checkin: newCheckinState,
+                      }))
+                    }}
+                    disabled={originalCheckinState}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography 
+                    variant="body2" 
+                    sx={{ 
+                      fontWeight: selectedAppointment.checkin ? 'bold' : 'normal',
+                      color: selectedAppointment.checkin ? 'primary.main' : 'text.primary',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    Present
                   </Typography>
                 }
               />
