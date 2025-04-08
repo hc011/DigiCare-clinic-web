@@ -7,61 +7,37 @@ export default function StatisticsCard({ patients, currentPatient, loading, queu
   const [stats, setStats] = useState({
     totalPatientsToday: 0,
     patientsMarkedLate: 0,
-    patientsDoneTillNow: 0,
-    averageCheckupTime: "12 mins",
     patientsWaiting: 0,
-    estimatedClosingTime: "5:30 PM",
-    mostCommonIssue: "Flu",
-    doctorAvailability: 3,
     totalCancelled: 0,
+    patientsPending: 0,
+    patientsDoneTillNow: 0,
   });
 
   useEffect(() => {
-
-    // const updatedStats = {
-    //   totalPatientsToday: patients.length,
-    //   patientsMarkedLate:
-    //     patients.length !== 0
-    //       ? patients.filter((p) => p.late === true).length
-    //       : 0,
-    //   patientsDoneTillNow: patients.filter((p) => p.status === "done_checkup")
-    //     .length,
-    //   averageCheckupTime: "12 mins",
-    //   patientsWaiting:
-    //     patients.length !== 0
-    //       ? patients.filter(
-    //           (p) => p.status !== "done_checkup" && p.status !== "cancelled"
-    //         ).length
-    //       : 0,
-    //   estimatedClosingTime: "5:30 PM",
-    //   mostCommonIssue: "Flu",
-    //   doctorAvailability: 3,
-    //   totalCancelled: patients.filter((p) => p.status === "cancelled").length,
-    // };
 
     const updatedStats = {
       totalPatientsToday: queueList.filter(p => p.appointment !== null).length,
       patientsMarkedLate:
         queueList.length !== 0
-          ? queueList.filter(p => p.appointment !== null).filter((p) => p.late === true).length
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status !== "cancelled").filter((p) => p.late === true).length
           : 0,
-      patientsDoneTillNow: queueList.filter(p => p.appointment !== null).filter((p) => p.status === "done_checkup")
-        .length,
-      averageCheckupTime: "12 mins",
       patientsWaiting:
         queueList.length !== 0
-          ? queueList.filter(p => p.appointment !== null).filter(
-              (p) => p.status !== "done_checkup" && p.status !== "cancelled"
-            ).length
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status == "pending").filter(p => p.checkin === true).length
           : 0,
-      estimatedClosingTime: "5:30 PM",
-      mostCommonIssue: "Flu",
-      doctorAvailability: 3,
       totalCancelled: queueList.filter((p) => p.status === "cancelled").length,
+      patientsPending:
+        queueList.length !== 0
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status == "pending").length
+          : 0,
+      patientsDoneTillNow:
+        queueList.length !== 0
+          ? queueList.filter(p => p.appointment !== null).filter(p => p.status == "done_checkup").length
+          : 0,
     };
 
     setStats(updatedStats);
-  }, [currentPatient, patients, queueList]);
+  }, [queueList]);
 
   return (
     <Card sx={styles.card}>
@@ -88,9 +64,14 @@ export default function StatisticsCard({ patients, currentPatient, loading, queu
           ))
         ) : (
           <Box sx={styles.grid}>
+             
             <StatItem
-              label="Total Patients Count"
-              value={stats.totalPatientsToday}
+              label="Patients Pending"
+              value={stats.patientsPending}
+            />
+            <StatItem
+              label="Patients Present"
+              value={stats.patientsWaiting}
             />
             <StatItem
               label="Late Patients Count"
@@ -99,12 +80,12 @@ export default function StatisticsCard({ patients, currentPatient, loading, queu
             <StatItem
               label="Patients Done Till Now"
               value={stats.patientsDoneTillNow}
-            />
-            <StatItem
-              label="Patients Remaining"
-              value={stats.patientsWaiting}
-            />
+            /> 
             <StatItem label="Total Cancelled" value={stats.totalCancelled} />
+            <StatItem
+              label="Total Patients Count"
+              value={stats.totalPatientsToday}
+            /> 
           </Box>
         )}
       </CardContent>
