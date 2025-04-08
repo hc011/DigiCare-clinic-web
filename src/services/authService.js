@@ -1,7 +1,7 @@
 import axios from "axios";
 import { cancelAllRequests } from "../utils/axiosInstance";
 import webSocketService from "./websocketService";
-
+import axiosInstance from "../utils/axiosInstance";
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 // Function to handle user login
@@ -43,8 +43,8 @@ export const logout = async () => {
     // Cancel all pending HTTP requests
     cancelAllRequests();
     
-    await axios.post(
-      `${API_BASE_URL}/api/logout`,
+    await axiosInstance.post(
+      "/api/logout",
       {},
       {
         withCredentials: true,
