@@ -128,6 +128,15 @@ export default function MobileAppointmentTable() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState(null);
   
+  // State for validation errors
+  const [validationErrors, setValidationErrors] = useState({
+    payment: false,
+    mobileNumber: false
+  });
+  
+  // Add state to track if mobile field has been touched
+  const [mobileFieldTouched, setMobileFieldTouched] = useState(false);
+  
   // State for search and filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -223,15 +232,38 @@ export default function MobileAppointmentTable() {
     setSelectedAppointment(null);
     setUpdateError(null);
     setOriginalCheckinState(false);
+    setValidationErrors({ payment: false, mobileNumber: false });
+    setMobileFieldTouched(false);
   };
 
   // Handle edit form submission
   const handleEditSubmit = async () => {
     if (!selectedAppointment) return;
     
-    // Validate that payment is true if present is true
-    if (selectedAppointment.checkin && !selectedAppointment.paid) {
-      showWarningSnackbar("Please complete payment details.", 3000);
+    // Reset validation errors
+    setValidationErrors({ payment: false, mobileNumber: false });
+    
+    // Check for validation errors
+    const paymentMissing = selectedAppointment.checkin && !selectedAppointment.paid;
+    const mobileMissing = selectedAppointment.checkin && 
+      (!selectedAppointment.phone_number || selectedAppointment.phone_number.trim() === '');
+    
+    if (paymentMissing || mobileMissing) {
+      // Set validation errors
+      setValidationErrors({
+        payment: paymentMissing,
+        mobileNumber: mobileMissing
+      });
+      
+      // Show appropriate snackbar message
+      if (paymentMissing && mobileMissing) {
+        showWarningSnackbar("Please complete both payment details and mobile number before marking patient as present", 3000);
+      } else if (paymentMissing) {
+        showWarningSnackbar("Please complete payment details before marking patient as present", 3000);
+      } else if (mobileMissing) {
+        showWarningSnackbar("Please enter mobile number before marking patient as present", 3000);
+      }
+      
       return;
     }
     
@@ -548,8 +580,17 @@ export default function MobileAppointmentTable() {
           borderRadius: 2,
           p: { xs: 1.5, sm: 2 },
           m: 0,
-          overflowY: "auto"
+          height: 'auto',
+          overflow: 'initial',
+          maxHeight: { xs: "calc(100% - 20px)", sm: "90vh" }
         }
+      }}
+      sx={{ 
+        '& .MuiDialog-container': { 
+          overflow: 'initial',
+          alignItems: { xs: 'flex-start', sm: 'center' },
+          pt: { xs: 2, sm: 0 }
+        } 
       }}
     >
       <Box sx={{ 
@@ -558,7 +599,8 @@ export default function MobileAppointmentTable() {
         pb: 1,
         display: "flex",
         alignItems: "center",
-        justifyContent: "space-between"
+        justifyContent: "space-between",
+        overflow: 'visible'
       }}>
         <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 600 }}>
           Edit Appointment
@@ -574,20 +616,21 @@ export default function MobileAppointmentTable() {
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
-      <DialogContent sx={{ p: 0, pt: 1 }}>
+      <DialogContent sx={{ p: 0, pt: 1, overflow: 'initial' }}>
         {selectedAppointment && (
           <Box
             sx={{
               display: "grid",
-              gap: { xs: "8px", sm: "12px" },
+              gap: { xs: "4px", sm: "8px" },
               gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-              width: "100%"
+              width: "100%",
+              overflow: 'initial'
             }}
           >
             <Box sx={{ 
               display: "grid", 
               gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr" },
-              gap: { xs: "8px", sm: "12px" }
+              gap: { xs: "4px", sm: "8px" }
             }}>
               <TextField
                 fullWidth
@@ -616,11 +659,34 @@ export default function MobileAppointmentTable() {
                 onChange={(_, newValue) => {
                   if (typeof newValue === 'object') {
                     handleEditPatientSelect(newValue);
+                    // Clear mobile number validation error when a patient is selected
+                    if (validationErrors.mobileNumber) {
+                      setValidationErrors(prev => ({ ...prev, mobileNumber: false }));
+                    }
                   } else {
                     setSelectedAppointment(prev => ({
                       ...prev,
                       phone_number: newValue || ""
                     }));
+                    // If the field is completely empty, don't show error
+                    if (!newValue || newValue.trim() === '') {
+                      // Only clear error if user is not trying to mark as present
+                      if (!selectedAppointment.checkin) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: false 
+                        }));
+                      }
+                    } else {
+                      // Otherwise validate for 10 digits
+                      const isValid = newValue.trim().length === 10;
+                      if (mobileFieldTouched || validationErrors.mobileNumber) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: !isValid 
+                        }));
+                      }
+                    }
                   }
                 }}
                 freeSolo={true}
@@ -636,6 +702,51 @@ export default function MobileAppointmentTable() {
                         phone_number: value
                       }));
                       handleEditMobileSearch(value);
+                      
+                      // If the field is completely empty, don't show error
+                      if (!value || value.trim() === '') {
+                        // Only clear error if user is not trying to mark as present
+                        if (!selectedAppointment.checkin) {
+                          setValidationErrors(prev => ({ 
+                            ...prev, 
+                            mobileNumber: false 
+                          }));
+                        }
+                      } else {
+                        // Otherwise validate for 10 digits
+                        const isValid = value.trim().length === 10;
+                        if (mobileFieldTouched || validationErrors.mobileNumber) {
+                          setValidationErrors(prev => ({ 
+                            ...prev, 
+                            mobileNumber: !isValid 
+                          }));
+                        }
+                      }
+                    }}
+                    onBlur={() => {
+                      // Mark field as touched when user leaves the field
+                      setMobileFieldTouched(true);
+                      
+                      // Get the current value
+                      const value = selectedAppointment.phone_number || "";
+                      
+                      // If the field is completely empty, don't show error
+                      // unless they're trying to mark as present
+                      if (!value || value.trim() === '') {
+                        if (!selectedAppointment.checkin) {
+                          setValidationErrors(prev => ({ 
+                            ...prev, 
+                            mobileNumber: false 
+                          }));
+                        }
+                      } else {
+                        // Otherwise validate for 10 digits
+                        const isValid = value.trim().length === 10;
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: !isValid
+                        }));
+                      }
                     }}
                     inputProps={{
                       ...params.inputProps,
@@ -644,7 +755,10 @@ export default function MobileAppointmentTable() {
                       style: { fontSize: '0.85rem' }
                     }}
                     InputLabelProps={{ 
-                      style: { fontSize: '0.85rem' } 
+                      style: { 
+                        fontSize: '0.85rem',
+                        color: validationErrors.mobileNumber ? '#d32f2f' : undefined
+                      } 
                     }}
                     InputProps={{
                       ...params.InputProps,
@@ -657,6 +771,23 @@ export default function MobileAppointmentTable() {
                       ),
                     }}
                     size="small"
+                    error={validationErrors.mobileNumber}
+                    helperText={validationErrors.mobileNumber ? "Please enter 10 digits" : ""}
+                    FormHelperTextProps={{
+                      sx: { 
+                        margin: 0, 
+                        marginTop: '2px',
+                        fontSize: '0.7rem'
+                      }
+                    }}
+                    sx={{
+                      '& .MuiOutlinedInput-root': {
+                        '& fieldset': {
+                          borderColor: validationErrors.mobileNumber ? 'error.main' : undefined,
+                          borderWidth: validationErrors.mobileNumber ? 2 : 1
+                        }
+                      }
+                    }}
                   />
                 )}
                 renderOption={(props, option) => (
@@ -675,7 +806,8 @@ export default function MobileAppointmentTable() {
             <Box sx={{ 
               display: "grid", 
               gridTemplateColumns: { xs: "1fr 1fr", sm: "1fr" },
-              gap: { xs: "8px", sm: "12px" }
+              gap: { xs: "4px", sm: "8px" },
+              mt: { xs: "-6px", sm: "-8px" }
             }}>
               <TextField
                 fullWidth
@@ -710,8 +842,9 @@ export default function MobileAppointmentTable() {
             <Box sx={{ 
               display: "grid", 
               gridTemplateColumns: "1fr 1fr",
-              gap: { xs: "8px", sm: "12px" },
-              gridColumn: { xs: "1", sm: "span 2" }
+              gap: { xs: "4px", sm: "8px" },
+              gridColumn: { xs: "1", sm: "span 2" },
+              mt: { xs: "-6px", sm: "-8px" }
             }}>
               <FormControlLabel
                 control={
@@ -734,6 +867,11 @@ export default function MobileAppointmentTable() {
                         mode: isPaid ? (prev.mode || "cash") : "",
                         fees_paid: isPaid ? (prev.fees_paid > 0 ? prev.fees_paid : 250) : 0
                       }));
+                      
+                      // Clear payment validation error when checkbox is checked
+                      if (validationErrors.payment && isPaid) {
+                        setValidationErrors(prev => ({ ...prev, payment: false }));
+                      }
                     }}
                     size="small"
                     name="payment-checkbox-mobile"
@@ -744,11 +882,8 @@ export default function MobileAppointmentTable() {
                     variant="body2" 
                     sx={{ 
                       fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
-                      color: selectedAppointment.paid 
-                        ? 'primary.main' 
-                        : (selectedAppointment.checkin && !selectedAppointment.paid) 
-                          ? 'error.main' 
-                          : 'text.primary',
+                      color: validationErrors.payment ? 'error.main' : 
+                        selectedAppointment.paid ? 'primary.main' : 'text.primary',
                       fontSize: '0.85rem'
                     }}
                   >
@@ -756,12 +891,7 @@ export default function MobileAppointmentTable() {
                   </Typography>
                 }
                 sx={{ 
-                  border: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin 
-                    ? '1px dashed #f44336' 
-                    : 'none',
                   borderRadius: '4px',
-                  p: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 0.5 : 0,
-                  bgcolor: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
                 }}
               />
               <FormControlLabel
@@ -771,9 +901,26 @@ export default function MobileAppointmentTable() {
                     onChange={(e) => {
                       const newCheckinState = e.target.checked;
                       
-                      // If trying to check in but payment not done, show warning
-                      if (newCheckinState && !selectedAppointment.paid) {
-                        showWarningSnackbar("Please complete payment details before marking patient as present", 3000);
+                      // Check both payment and mobile conditions
+                      const paymentMissing = newCheckinState && !selectedAppointment.paid;
+                      const mobileMissing = newCheckinState && (!selectedAppointment.phone_number || selectedAppointment.phone_number.trim() === '');
+                      
+                      // Update validation errors
+                      setValidationErrors({
+                        payment: paymentMissing,
+                        mobileNumber: mobileMissing
+                      });
+                      
+                      // Only allow checking the box if validations pass
+                      if (paymentMissing || mobileMissing) {
+                        // Show appropriate snackbar message
+                        if (paymentMissing && mobileMissing) {
+                          showWarningSnackbar("Please enter payment details and mobile number.", 3000);
+                        } else if (paymentMissing) {
+                          showWarningSnackbar("Please enter payment details.", 3000);
+                        } else if (mobileMissing) {
+                          showWarningSnackbar("Please enter mobile number.", 3000);
+                        }
                         return;
                       }
                       
@@ -805,7 +952,7 @@ export default function MobileAppointmentTable() {
               <Box sx={{ 
                 display: "grid", 
                 gridTemplateColumns: "1fr 1fr",
-                gap: { xs: "8px", sm: "12px" },
+                gap: { xs: "4px", sm: "8px" },
                 gridColumn: { xs: "1", sm: "span 2" }
               }}>
                 <FormControl fullWidth size="small">
@@ -847,7 +994,7 @@ export default function MobileAppointmentTable() {
             <Box sx={{ 
               display: "grid", 
               gridTemplateColumns: "1fr 1fr",
-              gap: { xs: "8px", sm: "12px" },
+              gap: { xs: "4px", sm: "8px" },
               gridColumn: { xs: "1", sm: "span 2" }
             }}>
               <TextField
@@ -895,7 +1042,7 @@ export default function MobileAppointmentTable() {
             <Box sx={{ 
               display: "grid", 
               gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-              gap: { xs: "8px", sm: "12px" },
+              gap: { xs: "4px", sm: "8px" },
               gridColumn: { xs: "1", sm: "span 2" }
             }}>
               <TextField
@@ -931,7 +1078,7 @@ export default function MobileAppointmentTable() {
             <Box sx={{ 
               display: "grid", 
               gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-              gap: { xs: "8px", sm: "12px" },
+              gap: { xs: "4px", sm: "8px" },
               gridColumn: { xs: "1", sm: "span 2" }
             }}>
               <FormControl fullWidth size="small">
@@ -972,49 +1119,54 @@ export default function MobileAppointmentTable() {
           </Box>
         )}
       </DialogContent>
-      <Box sx={{ 
-        mt: 2, 
-        display: "flex", 
-        justifyContent: "space-between",
-        px: { xs: 0.5, sm: 1 }
-      }}>
-        <Button
-          onClick={() => {
-            setRowToCancel(selectedAppointment);
-            setCancelConfirmationOpen(true);
-          }}
-          color="error"
-          variant="outlined"
+      <DialogActions sx={{ overflow: 'initial' }}>
+        <Box 
           sx={{ 
-            borderWidth: "1px",
-            fontSize: '0.75rem',
-            py: 0.5,
-            px: 1,
-            minWidth: '36px',
-            '&:hover': {
-              borderWidth: "1px"
-            }
+            display: "flex", 
+            width: "100%", 
+            px: 1, 
+            py: 1,
+            justifyContent: "space-between",
+            overflow: 'initial'
           }}
-          disabled={isCanceling}
-          size="small"
         >
-          {isCanceling ? <CircularProgress size={16} /> : "Cancel"}
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleEditSubmit}
-          disabled={isUpdating}
-          sx={{ 
-            fontSize: '0.75rem',
-            py: 0.5,
-            px: 1.5,
-            minWidth: '40px'
-          }}
-          size="small"
-        >
-          {isUpdating ? <CircularProgress size={16} /> : "Update"}
-        </Button>
-      </Box>
+          <Button 
+            onClick={() => {
+              setRowToCancel(selectedAppointment);
+              setCancelConfirmationOpen(true);
+            }}
+            variant="outlined"
+            color="error"
+            size="small"
+            sx={{ height: "28px", fontSize: "0.75rem" }}
+            disabled={isCanceling}
+          >
+            {isCanceling ? <CircularProgress size={12} /> : "Delete"}
+          </Button>
+          
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <Button 
+              onClick={handleEditModalClose}
+              variant="outlined"
+              color="primary"
+              size="small"
+              sx={{ height: "28px", fontSize: "0.75rem" }}
+            >
+              Close
+            </Button>
+            <Button 
+              onClick={handleEditSubmit}
+              variant="contained"
+              color="primary"
+              size="small"
+              sx={{ height: "28px", fontSize: "0.75rem" }}
+              disabled={isUpdating}
+            >
+              {isUpdating ? <CircularProgress size={12} /> : "Update"}
+            </Button>
+          </Box>
+        </Box>
+      </DialogActions>
     </Dialog>
   );
 
@@ -1031,17 +1183,24 @@ export default function MobileAppointmentTable() {
         }
       }}
     >
-      <DialogTitle sx={{ fontSize: '1rem', pt: 2, pb: 1 }}>Confirm Cancellation</DialogTitle>
+      <DialogTitle sx={{ fontSize: '1rem', pt: 2, pb: 1 }}>Confirm Deletion</DialogTitle>
       <DialogContent sx={{ pt: 0, px: 2, pb: 1 }}>
         <Typography sx={{ fontSize: '0.85rem' }}>
-          Are you sure you want to cancel this appointment for {rowToCancel?.patientName || rowToCancel?.firstName + ' ' + rowToCancel?.lastName}?
+          Are you sure you want to delete this appointment for {rowToCancel?.patientName || rowToCancel?.firstName + ' ' + rowToCancel?.lastName}?
         </Typography>
       </DialogContent>
       <DialogActions sx={{ p: 1.5 }}>
         <Button 
           onClick={() => setCancelConfirmationOpen(false)} 
           size="small"
-          sx={{ fontSize: '0.75rem', minWidth: '36px', px: 1 }}
+          sx={{ 
+            fontSize: '0.7rem', 
+            minWidth: '30px', 
+            px: 0.8,
+            py: 0.3,
+            height: '28px',
+            lineHeight: 1
+          }}
         >
           No
         </Button>
@@ -1050,7 +1209,14 @@ export default function MobileAppointmentTable() {
           color="error" 
           autoFocus 
           size="small"
-          sx={{ fontSize: '0.75rem', minWidth: '36px', px: 1 }}
+          sx={{ 
+            fontSize: '0.7rem', 
+            minWidth: '30px', 
+            px: 0.8,
+            py: 0.3,
+            height: '28px',
+            lineHeight: 1
+          }}
         >
           Yes
         </Button>
