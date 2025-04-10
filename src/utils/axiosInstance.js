@@ -1,5 +1,6 @@
 import axios from "axios";
 import { handleAutoLogout } from "./authUtils";
+import { isLoggingOut } from "../services/authService";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 const REFRESH_TOKEN_URL = process.env.REACT_APP_REFRESH_TOKEN_URL;
@@ -66,8 +67,15 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle 401 Unauthorized
+    // Handle 401 Unauthorized - special handling for logout requests
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // For logout requests, add _retry flag but don't attempt token refresh
+      if (originalRequest.url && originalRequest.url.includes('/api/logout')) {
+        console.log("Logout request failed with 401, marking as retried");
+        originalRequest._retry = true;
+        return Promise.reject(error);
+      }
+      
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedRequestsQueue.push({ resolve, reject });
@@ -111,7 +119,12 @@ const refreshAccessToken = async () => {
     );
     return response.data;
   } catch (error) {
-    handleAutoLogout("Your session has expired. Please log in again.", "info");
+    // Only trigger auto-logout if we're not already in the logout process
+    if (!isLoggingOut) {
+      handleAutoLogout("Your session has expired. Please log in again.", "info");
+    } else {
+      console.log("Token refresh failed during logout process, skipping auto-logout");
+    }
     throw error;
   }
 };
