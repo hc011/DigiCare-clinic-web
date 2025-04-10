@@ -266,6 +266,13 @@ export default function AppointmentTable() {
   });
   const [isCreatingSlot, setIsCreatingSlot] = useState(false);
   
+  const [validationErrors, setValidationErrors] = useState({
+    payment: false,
+    mobileNumber: false
+  });
+  
+  const [mobileFieldTouched, setMobileFieldTouched] = useState(false);
+  
   const getAppointments = async () => {
     if (!cabinId || !selectedSlot) return;
     
@@ -683,6 +690,8 @@ export default function AppointmentTable() {
     setEditModalOpen(false);
     setSelectedAppointment(null);
     setOriginalCheckinState(false);
+    setValidationErrors({ payment: false, mobileNumber: false });
+    setMobileFieldTouched(false);
   };
 
   const handleInputChange = (e) => {
@@ -844,14 +853,28 @@ export default function AppointmentTable() {
   const handleConfirmEdit = async () => {
     if (!selectedAppointment) return;
     
-    // Validate that payment is true if present is true
-    if (selectedAppointment.checkin && !selectedAppointment.paid) {
-      showWarningSnackbar("Please complete payment details.", 3000);
+    // Reset validation errors
+    setValidationErrors({ payment: false, mobileNumber: false });
+    
+    // Check for validation errors
+    const paymentMissing = selectedAppointment.checkin && !selectedAppointment.paid;
+    const mobileMissing = selectedAppointment.checkin && 
+      (!selectedAppointment.phone_number || selectedAppointment.phone_number.trim() === '');
+    
+    if (paymentMissing || mobileMissing) {
+      // Set validation errors
+      setValidationErrors({
+        payment: paymentMissing,
+        mobileNumber: mobileMissing
+      });
       
-      // Focus the payment checkbox by setting a temporary highlight 
-      const paymentCheckbox = document.querySelector('[name="payment-checkbox"]');
-      if (paymentCheckbox) {
-        paymentCheckbox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Show appropriate snackbar message
+      if (paymentMissing && mobileMissing) {
+        showWarningSnackbar("Please complete both payment details and mobile number.", 3000);
+      } else if (paymentMissing) {
+        showWarningSnackbar("Please complete payment detail.", 3000);
+      } else if (mobileMissing) {
+        showWarningSnackbar("Please enter mobile number.", 3000);
       }
       
       return;
@@ -1046,11 +1069,34 @@ export default function AppointmentTable() {
               onChange={(_, newValue) => {
                 if (typeof newValue === 'object') {
                   handleEditPatientSelect(newValue);
+                  // Clear mobile number validation error when a patient is selected
+                  if (validationErrors.mobileNumber) {
+                    setValidationErrors(prev => ({ ...prev, mobileNumber: false }));
+                  }
                 } else {
                   setSelectedAppointment(prev => ({
                   ...prev,
                     phone_number: newValue || ""
                   }));
+                  // If the field is completely empty, don't show error
+                  if (!newValue || newValue.trim() === '') {
+                    // Only clear error if user is not trying to mark as present
+                    if (!selectedAppointment.checkin) {
+                      setValidationErrors(prev => ({ 
+                        ...prev, 
+                        mobileNumber: false 
+                      }));
+                    }
+                  } else {
+                    // Otherwise validate for 10 digits
+                    const isValid = newValue.trim().length === 10;
+                    if (mobileFieldTouched || validationErrors.mobileNumber) {
+                      setValidationErrors(prev => ({ 
+                        ...prev, 
+                        mobileNumber: !isValid 
+                      }));
+                    }
+                  }
                 }
               }}
               freeSolo={true}
@@ -1065,6 +1111,51 @@ export default function AppointmentTable() {
                       phone_number: value
                     }));
                     handleEditMobileSearch(value);
+                    
+                    // If the field is completely empty, don't show error
+                    if (!value || value.trim() === '') {
+                      // Only clear error if user is not trying to mark as present
+                      if (!selectedAppointment.checkin) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: false 
+                        }));
+                      }
+                    } else {
+                      // Otherwise validate for 10 digits
+                      const isValid = value.trim().length === 10;
+                      if (mobileFieldTouched || validationErrors.mobileNumber) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: !isValid 
+                        }));
+                      }
+                    }
+                  }}
+                  onBlur={() => {
+                    // Mark field as touched when user leaves the field
+                    setMobileFieldTouched(true);
+                    
+                    // Get the current value
+                    const value = selectedAppointment.phone_number || "";
+                    
+                    // If the field is completely empty, don't show error
+                    // unless they're trying to mark as present
+                    if (!value || value.trim() === '') {
+                      if (!selectedAppointment.checkin) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: false 
+                        }));
+                      }
+                    } else {
+                      // Otherwise validate for 10 digits
+                      const isValid = value.trim().length === 10;
+                      setValidationErrors(prev => ({ 
+                        ...prev, 
+                        mobileNumber: !isValid 
+                      }));
+                    }
                   }}
                   inputProps={{
                     ...params.inputProps,
@@ -1079,6 +1170,22 @@ export default function AppointmentTable() {
                         {params.InputProps.endAdornment}
                       </>
                     ),
+                  }}
+                  error={validationErrors.mobileNumber}
+                  FormHelperTextProps={{
+                    sx: { margin: 0, marginTop: '3px' }
+                  }}
+                  helperText={validationErrors.mobileNumber ? "Please enter 10 digits" : ""}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      '& fieldset': {
+                        borderColor: validationErrors.mobileNumber ? 'error.main' : undefined,
+                        borderWidth: validationErrors.mobileNumber ? 2 : 1
+                      }
+                    },
+                    '& .MuiFormLabel-root': {
+                      color: validationErrors.mobileNumber ? 'error.main' : undefined
+                    }
                   }}
                 />
               )}
@@ -1119,14 +1226,19 @@ export default function AppointmentTable() {
               control={
                 <Checkbox
                   checked={selectedAppointment.paid}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setSelectedAppointment((prev) => ({
                       ...prev,
                       paid: e.target.checked,
                       mode: e.target.checked ? "cash" : "",
                       fees_paid: e.target.checked ? prev.fees_paid || 250 : 0,
-                    }))
-                  }
+                    }));
+                    
+                    // Clear payment validation error when checkbox is checked
+                    if (validationErrors.payment && e.target.checked) {
+                      setValidationErrors(prev => ({ ...prev, payment: false }));
+                    }
+                  }}
                   name="payment-checkbox"
                 />
               }
@@ -1135,24 +1247,13 @@ export default function AppointmentTable() {
                   variant="body1" 
                   sx={{ 
                     fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
-                    color: selectedAppointment.paid 
-                      ? 'primary.main' 
-                      : (selectedAppointment.checkin && !selectedAppointment.paid) 
-                        ? 'error.main' 
-                        : 'text.primary'
+                    color: validationErrors.payment ? 'error.main' : 
+                      selectedAppointment.paid ? 'primary.main' : 'text.primary'
                   }}
                 >
                   Payment Done
                 </Typography>
               }
-              sx={{ 
-                border: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin 
-                  ? '1px dashed #f44336' 
-                  : 'none',
-                borderRadius: '4px',
-                p: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 1 : 0,
-                bgcolor: selectedAppointment && !selectedAppointment.paid && selectedAppointment.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
-              }}
             />
             <FormControlLabel
               control={
@@ -1161,9 +1262,31 @@ export default function AppointmentTable() {
                   onChange={(e) => {
                     const newCheckinState = e.target.checked;
                     
-                    // If trying to check in but payment not done, show warning
-                    if (newCheckinState && !selectedAppointment.paid) {
-                      showWarningSnackbar("Please complete payment details before marking patient as present", 3000);
+                    // Check both payment and mobile conditions
+                    const paymentMissing = newCheckinState && !selectedAppointment.paid;
+                    const mobileMissing = newCheckinState && (!selectedAppointment.phone_number || selectedAppointment.phone_number.trim() === '');
+                    
+                    // Update validation errors
+                    setValidationErrors({
+                      payment: paymentMissing,
+                      mobileNumber: mobileMissing
+                    });
+                    
+                    // If both are missing, show combined message
+                    if (paymentMissing && mobileMissing) {
+                      showWarningSnackbar("Please enter payment details and mobile number before marking patient as present", 3000);
+                      return;
+                    }
+                    
+                    // If only payment is missing
+                    if (paymentMissing) {
+                      showWarningSnackbar("Please enter payment details before marking patient as present", 3000);
+                      return;
+                    }
+                    
+                    // If only mobile number is missing
+                    if (mobileMissing) {
+                      showWarningSnackbar("Please enter mobile number before marking patient as present", 3000);
                       return;
                     }
                     
