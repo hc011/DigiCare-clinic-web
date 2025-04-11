@@ -45,6 +45,13 @@ const AppointmentForm = () => {
   const { showSuccessSnackbar, showErrorSnackbar, showWarningSnackbar } = useNotification();
   // Create a ref for updateMaxToken to avoid dependency cycle
   const updateMaxTokenRef = React.useRef(updateMaxToken);
+  
+  // New state for mobile validation
+  const [mobileFieldTouched, setMobileFieldTouched] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({
+    mobileNumber: false,
+    payment: false
+  });
 
   // Keep the ref current
   React.useEffect(() => {
@@ -77,6 +84,8 @@ const AppointmentForm = () => {
     if (isOpen) {
       setIsInitializing(true);
       setError("");
+      setValidationErrors({ mobileNumber: false, payment: false });
+      setMobileFieldTouched(false);
       
       if (!cabinId) {
         setError("No valid cabin found. Please contact support.");
@@ -151,6 +160,8 @@ const AppointmentForm = () => {
       appointment_type: "New",
     });
     setError("");
+    setValidationErrors({ mobileNumber: false, payment: false });
+    setMobileFieldTouched(false);
   };
 
   const handleClose = () => {
@@ -173,6 +184,29 @@ const AppointmentForm = () => {
     }
 
     setNewAppointment((prev) => ({ ...prev, [name]: value }));
+    
+    // Validate mobile number as it's being entered
+    if (name === "phone_number") {
+      // If the field is completely empty, don't show error
+      // unless they're trying to mark as present
+      if (!value || value.trim() === '') {
+        if (!newAppointment.checkin) {
+          setValidationErrors(prev => ({ 
+            ...prev, 
+            mobileNumber: false 
+          }));
+        }
+      } else {
+        // Otherwise validate for 10 digits
+        const isValid = value.trim().length === 10;
+        if (mobileFieldTouched || validationErrors.mobileNumber) {
+          setValidationErrors(prev => ({ 
+            ...prev, 
+            mobileNumber: !isValid 
+          }));
+        }
+      }
+    }
   };
 
   const handleSexChange = (event, newSex) => {
@@ -234,6 +268,12 @@ const AppointmentForm = () => {
         location: patient.location || "",
         guardian: patient.guardian || "",
       }));
+      
+      // Clear mobile number validation error when a patient is selected
+      if (validationErrors.mobileNumber) {
+        setValidationErrors(prev => ({ ...prev, mobileNumber: false }));
+      }
+      
       setMobileSearchResults([]);
     }
   };
@@ -288,6 +328,9 @@ const AppointmentForm = () => {
     const trimmedFirstName = newAppointment.firstName.trim();
     const trimmedLastName = newAppointment.lastName.trim();
 
+    // Reset validation errors
+    setValidationErrors({ mobileNumber: false, payment: false });
+
     if (!newAppointment.token) {
       setError("Token number is required");
       return;
@@ -300,12 +343,20 @@ const AppointmentForm = () => {
       setError("This token number is already in use");
       return;
     }
-    if (
-      newAppointment.phone_number &&
-      (!/^\d+$/.test(newAppointment.phone_number) || newAppointment.phone_number.length > 10)
-    ) {
-      setError("Invalid mobile number (maximum 10 digits, numbers only)");
-      return;
+
+    // Validation for mobile number
+    if (newAppointment.phone_number) {
+      if (!/^\d+$/.test(newAppointment.phone_number)) {
+        setError("Invalid mobile number (numbers only)");
+        setValidationErrors(prev => ({ ...prev, mobileNumber: true }));
+        return;
+      }
+      
+      if (newAppointment.phone_number.length !== 10) {
+        setError("Mobile number must be exactly 10 digits");
+        setValidationErrors(prev => ({ ...prev, mobileNumber: true }));
+        return;
+      }
     }
     
     if (!selectedSlot) {
@@ -313,11 +364,33 @@ const AppointmentForm = () => {
       return;
     }
     
-    // Validate that payment is true if present is true
-    if (newAppointment.checkin && !newAppointment.paid) {
-      showWarningSnackbar("Patient cannot be marked as present without payment details");
-      setError("Please complete payment details before marking patient as present");
-      return;
+    // Check for conditions that would prevent marking as present
+    if (newAppointment.checkin) {
+      const paymentMissing = !newAppointment.paid;
+      const mobileMissing = !newAppointment.phone_number || newAppointment.phone_number.trim() === '' || 
+                            newAppointment.phone_number.length !== 10;
+      
+      if (paymentMissing || mobileMissing) {
+        // Set validation errors
+        setValidationErrors({
+          payment: paymentMissing,
+          mobileNumber: mobileMissing
+        });
+        
+        // Show appropriate error message
+        if (paymentMissing && mobileMissing) {
+          setError("Please complete both payment details and mobile number before marking patient as present");
+          showWarningSnackbar("Please complete both payment details and mobile number", 3000);
+        } else if (paymentMissing) {
+          setError("Please complete payment details before marking patient as present");
+          showWarningSnackbar("Please complete payment details", 3000);
+        } else if (mobileMissing) {
+          setError("Please enter a valid 10-digit mobile number before marking patient as present");
+          showWarningSnackbar("Please enter a valid 10-digit mobile number", 3000);
+        }
+        
+        return;
+      }
     }
 
     const newEntry = {
@@ -408,6 +481,26 @@ const AppointmentForm = () => {
                         ...prev,
                         phone_number: newValue || ""
                       }));
+                      
+                      // If the field is completely empty, don't show error
+                      // unless they're trying to mark as present
+                      if (!newValue || newValue.trim() === '') {
+                        if (!newAppointment.checkin) {
+                          setValidationErrors(prev => ({ 
+                            ...prev, 
+                            mobileNumber: false 
+                          }));
+                        }
+                      } else {
+                        // Otherwise validate for 10 digits
+                        const isValid = newValue.trim().length === 10;
+                        if (mobileFieldTouched || validationErrors.mobileNumber) {
+                          setValidationErrors(prev => ({ 
+                            ...prev, 
+                            mobileNumber: !isValid 
+                          }));
+                        }
+                      }
                     }
                   }}
                   freeSolo={true}
@@ -424,6 +517,51 @@ const AppointmentForm = () => {
                             phone_number: value
                           }));
                           handleMobileSearch(value);
+                          
+                          // If the field is completely empty, don't show error
+                          // unless they're trying to mark as present
+                          if (!value || value.trim() === '') {
+                            if (!newAppointment.checkin) {
+                              setValidationErrors(prev => ({ 
+                                ...prev, 
+                                mobileNumber: false 
+                              }));
+                            }
+                          } else {
+                            // Otherwise validate for 10 digits
+                            const isValid = value.trim().length === 10;
+                            if (mobileFieldTouched || validationErrors.mobileNumber) {
+                              setValidationErrors(prev => ({ 
+                                ...prev, 
+                                mobileNumber: !isValid 
+                              }));
+                            }
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        // Mark field as touched when user leaves the field
+                        setMobileFieldTouched(true);
+                        
+                        // Get the current value
+                        const value = newAppointment.phone_number || "";
+                        
+                        // If the field is completely empty, don't show error
+                        // unless they're trying to mark as present
+                        if (!value || value.trim() === '') {
+                          if (!newAppointment.checkin) {
+                            setValidationErrors(prev => ({ 
+                              ...prev, 
+                              mobileNumber: false 
+                            }));
+                          }
+                        } else {
+                          // Otherwise validate for 10 digits
+                          const isValid = value.trim().length === 10;
+                          setValidationErrors(prev => ({ 
+                            ...prev, 
+                            mobileNumber: !isValid
+                          }));
                         }
                       }}
                       inputProps={{
@@ -440,10 +578,25 @@ const AppointmentForm = () => {
                           </>
                         ),
                       }}
+                      error={validationErrors.mobileNumber}
+                      helperText={validationErrors.mobileNumber ? "Please enter 10 digits" : ""}
+                      FormHelperTextProps={{
+                        sx: { 
+                          margin: 0, 
+                          marginTop: '2px'
+                        }
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          '& fieldset': {
+                            borderColor: validationErrors.mobileNumber ? 'error.main' : undefined,
+                            borderWidth: validationErrors.mobileNumber ? 2 : 1
+                          }
+                        }
+                      }}
                     />
                   )}
                   renderOption={(props, option, index) => {
-                    console.log(option);
                     const { key, ...otherProps } = props;
                     const uniqueKey = option.patient_id;
                     return (
@@ -485,14 +638,20 @@ const AppointmentForm = () => {
                 control={
                   <Checkbox
                     checked={newAppointment.paid}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const isPaid = e.target.checked;
                       setNewAppointment((prev) => ({
                         ...prev,
-                        paid: e.target.checked,
-                        mode: e.target.checked ? "cash" : "",
-                        fees_paid: e.target.checked ? 250 : 0,
-                      }))
-                    }
+                        paid: isPaid,
+                        mode: isPaid ? "cash" : "",
+                        fees_paid: isPaid ? 250 : 0,
+                      }));
+                      
+                      // Clear payment validation error when checkbox is checked
+                      if (validationErrors.payment && isPaid) {
+                        setValidationErrors(prev => ({ ...prev, payment: false }));
+                      }
+                    }}
                     name="payment-checkbox"
                   />
                 }
@@ -503,7 +662,7 @@ const AppointmentForm = () => {
                       fontWeight: newAppointment.paid ? 'bold' : 'normal',
                       color: newAppointment.paid 
                         ? 'primary.main' 
-                        : (newAppointment.checkin && !newAppointment.paid) 
+                        : (validationErrors.payment || (newAppointment.checkin && !newAppointment.paid)) 
                           ? 'error.main' 
                           : 'text.primary'
                     }}
@@ -511,14 +670,6 @@ const AppointmentForm = () => {
                     Payment Done
                   </Typography>
                 }
-                sx={{ 
-                  border: newAppointment && !newAppointment.paid && newAppointment.checkin 
-                    ? '1px dashed #f44336' 
-                    : 'none',
-                  borderRadius: '4px',
-                  p: newAppointment && !newAppointment.paid && newAppointment.checkin ? 1 : 0,
-                  bgcolor: newAppointment && !newAppointment.paid && newAppointment.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
-                }}
               />
               <FormControlLabel
                 control={
@@ -527,9 +678,29 @@ const AppointmentForm = () => {
                     onChange={(e) => {
                       const newCheckinState = e.target.checked;
                       
-                      // If trying to check in but payment not done, show warning
-                      if (newCheckinState && !newAppointment.paid) {
-                        showWarningSnackbar("Please complete payment details before marking patient as present");
+                      // Check both payment and mobile conditions
+                      const paymentMissing = newCheckinState && !newAppointment.paid;
+                      const mobileMissing = newCheckinState && 
+                        (!newAppointment.phone_number || 
+                         newAppointment.phone_number.trim() === '' ||
+                         newAppointment.phone_number.length !== 10);
+                      
+                      // Update validation errors
+                      setValidationErrors({
+                        payment: paymentMissing,
+                        mobileNumber: mobileMissing
+                      });
+                      
+                      // Only allow checking the box if validations pass
+                      if (paymentMissing || mobileMissing) {
+                        // Show appropriate snackbar message
+                        if (paymentMissing && mobileMissing) {
+                          showWarningSnackbar("Please complete both payment details and mobile number", 3000);
+                        } else if (paymentMissing) {
+                          showWarningSnackbar("Please complete payment details", 3000);
+                        } else if (mobileMissing) {
+                          showWarningSnackbar("Please enter valid 10-digit mobile number", 3000);
+                        }
                         return;
                       }
                       
