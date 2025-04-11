@@ -26,6 +26,7 @@ const ManageSlot = () => {
   const selectedSlotInfo = JSON.parse(localStorage.getItem('cabin_selected_slot_info')) || {};
   const [slotActive, setSlotActive] = useState(selectedSlotInfo?.is_active || false);
   const [autoAdjust, setAutoAdjust] = useState(selectedSlotInfo?.auto_adjust || false);
+  const [registrations, setRegistrations] = useState(selectedSlotInfo?.registrations || false);
   const [loading, setLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -37,6 +38,20 @@ const ManageSlot = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const { cabinId, selectedSlot } = getCabinInfo();
+
+  // Format the slot date for display
+  const formatSlotDate = (slot) => {
+    if (!slot) return 'No slot selected';
+    const date = new Date(slot);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long',
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
   // Dialog states
   const [confirmDialog, setConfirmDialog] = useState({
@@ -121,6 +136,31 @@ const ManageSlot = () => {
     });
   };
 
+  const handleRegistrationsChange = (event) => {
+    const newValue = event.target.checked;
+    setConfirmDialog({
+      open: true,
+      title: newValue ? 'Enable Online Appointments?' : 'Disable Online Appointments?',
+      message: newValue 
+        ? 'Are you sure you want to enable online appointments for this slot?' 
+        : 'Are you sure you want to disable online appointments for this slot?',
+      action: async () => {
+        try {
+          await callSlotApi({
+            cabinId: cabinId,
+            slot: selectedSlot,
+            registrations: newValue
+          });
+          setRegistrations(newValue);
+        } catch (error) {
+          console.error('Error updating online appointments status:', error);
+        }
+      },
+      confirmText: 'Yes',
+      cancelText: 'No'
+    });
+  };
+
   const handleEndSlot = () => {
     setConfirmDialog({
       open: true,
@@ -178,6 +218,7 @@ const ManageSlot = () => {
           // Update state with values from localStorage
           setSlotActive(storedSlotInfo.is_active || false);
           setAutoAdjust(storedSlotInfo.auto_adjust || false);
+          setRegistrations(storedSlotInfo.registrations || false);
         }
         
         setLoading(false);
@@ -204,6 +245,21 @@ const ManageSlot = () => {
         margin: '0 auto'
       }}
     >
+      <Paper
+        elevation={2}
+        sx={{
+          padding: '12px 16px',
+          marginBottom: '20px',
+          borderRadius: '8px',
+          backgroundColor: theme.palette.primary.main,
+          color: 'white'
+        }}
+      >
+        <Typography variant={isMobile ? 'body1' : 'h6'} align="center">
+          Current Slot: {formatSlotDate(selectedSlot)}
+        </Typography>
+      </Paper>
+
       <Typography variant={isMobile ? 'h5' : 'h4'} gutterBottom>
         Manage Slot
       </Typography>
@@ -297,6 +353,35 @@ const ManageSlot = () => {
           </Grid>
 
           <Grid item>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={registrations}
+                  onChange={handleRegistrationsChange}
+                  color="primary"
+                  disabled={loading}
+                  sx={{ 
+                    '& .MuiSwitch-switchBase.Mui-checked': {
+                      color: '#ff9800',
+                    },
+                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                      backgroundColor: '#ff9800',
+                    }
+                  }}
+                />
+              }
+              label={
+                <Typography variant="body1">
+                  Online Appointments
+                </Typography>
+              }
+            />
+            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+              Enable to allow patients to book appointments online.
+            </Typography>
+          </Grid>
+
+          <Grid item>
             <Box 
               sx={{ 
                 display: 'flex', 
@@ -318,9 +403,7 @@ const ManageSlot = () => {
                 End Slot
               </Button>
             </Box>
-            <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                This action cannot be undone.
-            </Typography>
+
           </Grid>
         </Grid>
       </Paper>
