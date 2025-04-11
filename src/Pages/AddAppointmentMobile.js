@@ -31,6 +31,13 @@ export default function AddAppointmentMobile({ patients }) {
   const { showSuccessSnackbar, showErrorSnackbar, showWarningSnackbar } = useNotification();
   const [mobileSearchResults, setMobileSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  
+  // Add new state for mobile validation
+  const [mobileFieldTouched, setMobileFieldTouched] = useState(false);
+  const [validationErrors, setValidationErrors] = useState({
+    mobileNumber: false,
+    payment: false
+  });
 
   const [formData, setFormData] = useState({
     token: "",
@@ -85,11 +92,37 @@ export default function AddAppointmentMobile({ patients }) {
 
   useEffect(() => {
     fetchSuggestedToken();
+    // Reset validation errors when component mounts
+    setValidationErrors({ mobileNumber: false, payment: false });
+    setMobileFieldTouched(false);
   }, [cabinId, selectedSlot]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Validate mobile number as it's being entered
+    if (name === "phone_number") {
+      // If the field is completely empty, don't show error
+      // unless they're trying to mark as present
+      if (!value || value.trim() === '') {
+        if (!formData.checkin) {
+          setValidationErrors(prev => ({ 
+            ...prev, 
+            mobileNumber: false 
+          }));
+        }
+      } else {
+        // Otherwise validate for 10 digits
+        const isValid = value.trim().length === 10;
+        if (mobileFieldTouched || validationErrors.mobileNumber) {
+          setValidationErrors(prev => ({ 
+            ...prev, 
+            mobileNumber: !isValid 
+          }));
+        }
+      }
+    }
   };
 
   const handleSexChange = (event, newSex) => {
@@ -106,14 +139,39 @@ export default function AddAppointmentMobile({ patients }) {
       mode: paid ? "cash" : "",
       fees_paid: paid ? 250 : 0,
     }));
+    
+    // Clear payment validation error when checkbox is checked
+    if (validationErrors.payment && paid) {
+      setValidationErrors(prev => ({ ...prev, payment: false }));
+    }
   };
 
   const handleCheckinChange = (e) => {
     const newCheckinState = e.target.checked;
     
-    // If trying to check in but payment not done, show warning
-    if (newCheckinState && !formData.paid) {
-      showWarningSnackbar("Please complete payment details before marking patient as present");
+    // Check both payment and mobile conditions
+    const paymentMissing = newCheckinState && !formData.paid;
+    const mobileMissing = newCheckinState && 
+      (!formData.phone_number || 
+       formData.phone_number.trim() === '' ||
+       formData.phone_number.length !== 10);
+    
+    // Update validation errors
+    setValidationErrors({
+      payment: paymentMissing,
+      mobileNumber: mobileMissing
+    });
+    
+    // Only allow checking the box if validations pass
+    if (paymentMissing || mobileMissing) {
+      // Show appropriate snackbar message
+      if (paymentMissing && mobileMissing) {
+        showWarningSnackbar("Please complete both payment details and mobile number", 3000);
+      } else if (paymentMissing) {
+        showWarningSnackbar("Please complete payment details", 3000);
+      } else if (mobileMissing) {
+        showWarningSnackbar("Please enter valid 10-digit mobile number", 3000);
+      }
       return;
     }
     
@@ -130,6 +188,9 @@ export default function AddAppointmentMobile({ patients }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    
+    // Reset validation errors before validation
+    setValidationErrors({ mobileNumber: false, payment: false });
 
     if (!validateToken(formData.token)) {
       setError("Please enter a valid token number");
@@ -143,11 +204,52 @@ export default function AddAppointmentMobile({ patients }) {
       return;
     }
     
-    // Validate that payment is true if present is true
-    if (formData.checkin && !formData.paid) {
-      showWarningSnackbar("Patient cannot be marked as present without payment details");
-      setLoading(false);
-      return;
+    // Check for mobile validation if present
+    if (formData.phone_number) {
+      if (!/^\d+$/.test(formData.phone_number)) {
+        setError("Invalid mobile number (numbers only)");
+        setValidationErrors(prev => ({ ...prev, mobileNumber: true }));
+        setLoading(false);
+        return;
+      }
+      
+      if (formData.phone_number.length !== 10) {
+        setError("Mobile number must be exactly 10 digits");
+        setValidationErrors(prev => ({ ...prev, mobileNumber: true }));
+        setLoading(false);
+        return;
+      }
+    }
+    
+    // Check conditions for marking patient as present
+    if (formData.checkin) {
+      const paymentMissing = !formData.paid;
+      const mobileMissing = !formData.phone_number || 
+                          formData.phone_number.trim() === '' ||
+                          formData.phone_number.length !== 10;
+      
+      if (paymentMissing || mobileMissing) {
+        // Set validation errors
+        setValidationErrors({
+          payment: paymentMissing,
+          mobileNumber: mobileMissing
+        });
+        
+        // Show appropriate error message
+        if (paymentMissing && mobileMissing) {
+          setError("Please complete both payment details and mobile number before marking patient as present");
+          showWarningSnackbar("Please complete both payment details and mobile number");
+        } else if (paymentMissing) {
+          setError("Please complete payment details before marking patient as present");
+          showWarningSnackbar("Please complete payment details");
+        } else if (mobileMissing) {
+          setError("Please enter a valid 10-digit mobile number before marking patient as present");
+          showWarningSnackbar("Please enter a valid 10-digit mobile number");
+        }
+        
+        setLoading(false);
+        return;
+      }
     }
 
     try {
@@ -193,6 +295,10 @@ export default function AddAppointmentMobile({ patients }) {
         mode: "",
         fees_paid: 0,
       });
+      
+      // Reset validation errors
+      setValidationErrors({ mobileNumber: false, payment: false });
+      setMobileFieldTouched(false);
 
       // Refresh token suggestion after successfully adding
       await fetchSuggestedToken();
@@ -240,6 +346,12 @@ export default function AddAppointmentMobile({ patients }) {
         location: patient.location || "",
         guardian: patient.guardian || "",
       }));
+      
+      // Clear mobile validation error when a patient is selected
+      if (validationErrors.mobileNumber) {
+        setValidationErrors(prev => ({ ...prev, mobileNumber: false }));
+      }
+      
       setMobileSearchResults([]);
     }
   };
@@ -304,6 +416,26 @@ export default function AddAppointmentMobile({ patients }) {
                   ...prev,
                   phone_number: newValue || ""
                 }));
+                
+                // If the field is completely empty, don't show error
+                // unless they're trying to mark as present
+                if (!newValue || newValue.trim() === '') {
+                  if (!formData.checkin) {
+                    setValidationErrors(prev => ({ 
+                      ...prev, 
+                      mobileNumber: false 
+                    }));
+                  }
+                } else {
+                  // Otherwise validate for 10 digits
+                  const isValid = newValue.trim().length === 10;
+                  if (mobileFieldTouched || validationErrors.mobileNumber) {
+                    setValidationErrors(prev => ({ 
+                      ...prev, 
+                      mobileNumber: !isValid 
+                    }));
+                  }
+                }
               }
             }}
             freeSolo={true}
@@ -320,6 +452,51 @@ export default function AddAppointmentMobile({ patients }) {
                       phone_number: value
                     }));
                     handleMobileSearch(value);
+                    
+                    // If the field is completely empty, don't show error
+                    // unless they're trying to mark as present
+                    if (!value || value.trim() === '') {
+                      if (!formData.checkin) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: false 
+                        }));
+                      }
+                    } else {
+                      // Otherwise validate for 10 digits
+                      const isValid = value.trim().length === 10;
+                      if (mobileFieldTouched || validationErrors.mobileNumber) {
+                        setValidationErrors(prev => ({ 
+                          ...prev, 
+                          mobileNumber: !isValid 
+                        }));
+                      }
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  // Mark field as touched when user leaves the field
+                  setMobileFieldTouched(true);
+                  
+                  // Get the current value
+                  const value = formData.phone_number || "";
+                  
+                  // If the field is completely empty, don't show error
+                  // unless they're trying to mark as present
+                  if (!value || value.trim() === '') {
+                    if (!formData.checkin) {
+                      setValidationErrors(prev => ({ 
+                        ...prev, 
+                        mobileNumber: false 
+                      }));
+                    }
+                  } else {
+                    // Otherwise validate for 10 digits
+                    const isValid = value.trim().length === 10;
+                    setValidationErrors(prev => ({ 
+                      ...prev, 
+                      mobileNumber: !isValid
+                    }));
                   }
                 }}
                 inputProps={{
@@ -336,7 +513,24 @@ export default function AddAppointmentMobile({ patients }) {
                     </>
                   ),
                 }}
-                sx={{ mb: 1 }}
+                error={validationErrors.mobileNumber}
+                helperText={validationErrors.mobileNumber ? "Please enter 10 digits" : ""}
+                FormHelperTextProps={{
+                  sx: { 
+                    margin: 0, 
+                    marginTop: '2px',
+                    fontSize: '0.7rem'
+                  }
+                }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: validationErrors.mobileNumber ? 'error.main' : undefined,
+                      borderWidth: validationErrors.mobileNumber ? 2 : 1
+                    }
+                  },
+                  mb: 1
+                }}
               />
             )}
             renderOption={(props, option) => {
@@ -392,7 +586,7 @@ export default function AddAppointmentMobile({ patients }) {
                   fontWeight: formData.paid ? 'bold' : 'normal',
                   color: formData.paid 
                     ? 'primary.main' 
-                    : (formData.checkin && !formData.paid) 
+                    : (validationErrors.payment || (formData.checkin && !formData.paid)) 
                       ? 'error.main' 
                       : 'text.primary'
                 }}
@@ -400,14 +594,6 @@ export default function AddAppointmentMobile({ patients }) {
                 Payment
               </Typography>
             }
-            sx={{ 
-              border: formData && !formData.paid && formData.checkin 
-                ? '1px dashed #f44336' 
-                : 'none',
-              borderRadius: '4px',
-              p: formData && !formData.paid && formData.checkin ? 0.5 : 0,
-              bgcolor: formData && !formData.paid && formData.checkin ? 'rgba(244, 67, 54, 0.08)' : 'transparent'
-            }}
           />
           <FormControlLabel
             control={
