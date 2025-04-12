@@ -608,8 +608,8 @@ export default function MobileAppointmentTable() {
 
   // Generate display rows with placeholders for missing tokens
   const displayedRows = useMemo(() => 
-    generateDisplayRows(filteredAppointments, !!searchQuery), 
-    [filteredAppointments, searchQuery]
+    generateDisplayRows(filteredAppointments, !!searchQuery || filterStatus !== 'all' || filterPaid !== 'all' || filterPresent !== 'all' || filterLate !== 'all'), 
+    [filteredAppointments, searchQuery, filterStatus, filterPaid, filterPresent, filterLate]
   );
 
   // Render functions
