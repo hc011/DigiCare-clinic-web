@@ -330,9 +330,9 @@ const PatientItem = ({
             )}
           </div>
           
-          <div className="action-buttons">
+          <div className="action-buttons" style={{ background: 'transparent' }}>
             {/* Mark Done button - show for all patients that aren't already done */}
-            {!isDone && (
+            {!isDone && checkin && (
               <Tooltip title="Mark as Done">
                 <MuiButton
                   variant={isCurrent ? "contained" : "outlined"}
@@ -367,6 +367,7 @@ const PatientItem = ({
                     e.stopPropagation();
                     setConfirmAction("late");
                   }}
+                  sx={{ backgroundColor: 'white' }}
                 >
                   {loadingType === "late" ? (
                     <CircularProgress size={20} color="inherit" />
