@@ -41,7 +41,7 @@ import {
 } from "../services/api";
 import "./MobileAppointmentTable.css";
 import SearchIcon from "@mui/icons-material/Search";
-import { CheckCircle, Cancel, Edit, BarChart } from "@mui/icons-material";
+import { CheckCircle, Cancel, Edit, BarChart, FilterList } from "@mui/icons-material";
 import CloseIcon from "@mui/icons-material/Close";
 import { getCabinInfo } from "../utils/dateUtils";
 import webSocketService from "../services/websocketService";
@@ -140,6 +140,10 @@ export default function MobileAppointmentTable() {
   // State for search and filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterPaid, setFilterPaid] = useState("all");
+  const [filterPresent, setFilterPresent] = useState("all");
+  const [filterLate, setFilterLate] = useState("all");
+  const [filterDialogOpen, setFilterDialogOpen] = useState(false);
   
   // State for cancellation confirmation
   const [cancelConfirmationOpen, setCancelConfirmationOpen] = useState(false);
@@ -431,6 +435,7 @@ export default function MobileAppointmentTable() {
           mode: apt.mode || "",
           fees_paid: apt.fees_paid || 0,
           appointment_type: apt.appointment_type || "New",
+          late: apt.late || false,
           isPlaceholder: false,
         };
       });
@@ -499,6 +504,7 @@ export default function MobileAppointmentTable() {
               mode: appointmentData.mode || "cash",
               fees_paid: appointmentData.fees_paid || 0,
               appointment_type: appointmentData.appointment_type || "New",
+              late: appointmentData.late || false,
               isPlaceholder: false
             };
 
@@ -531,6 +537,19 @@ export default function MobileAppointmentTable() {
     };
   }, [cabinId, selectedSlot]);
 
+  // Handle opening/closing filter dialog
+  const handleFilterDialogToggle = () => {
+    setFilterDialogOpen(!filterDialogOpen);
+  };
+
+  // Handle filter reset
+  const handleResetFilters = () => {
+    setFilterStatus("all");
+    setFilterPaid("all");
+    setFilterPresent("all");
+    setFilterLate("all");
+  };
+
   // Apply filters and search
   const filteredAppointments = useMemo(() => {
     return appointments
@@ -538,6 +557,33 @@ export default function MobileAppointmentTable() {
         // Filter by status
         if (filterStatus !== 'all') {
           return apt.status === filterStatus;
+        }
+        return true;
+      })
+      .filter(apt => {
+        // Filter by payment status
+        if (filterPaid === 'paid') {
+          return apt.paid === true;
+        } else if (filterPaid === 'unpaid') {
+          return apt.paid === false;
+        }
+        return true;
+      })
+      .filter(apt => {
+        // Filter by presence status
+        if (filterPresent === 'present') {
+          return apt.checkin === true;
+        } else if (filterPresent === 'absent') {
+          return apt.checkin === false;
+        }
+        return true;
+      })
+      .filter(apt => {
+        // Filter by late status
+        if (filterLate === 'late') {
+          return apt.late === true;
+        } else if (filterLate === 'on-time') {
+          return apt.late === false;
         }
         return true;
       })
@@ -558,7 +604,7 @@ export default function MobileAppointmentTable() {
         const tokenB = parseInt(b.token) || 0;
         return tokenA - tokenB;
       });
-  }, [appointments, filterStatus, searchQuery]);
+  }, [appointments, filterStatus, filterPaid, filterPresent, filterLate, searchQuery]);
 
   // Generate display rows with placeholders for missing tokens
   const displayedRows = useMemo(() => 
@@ -1429,6 +1475,174 @@ export default function MobileAppointmentTable() {
     </Dialog>
   );
 
+  // Render filter dialog
+  const renderFilterDialog = () => (
+    <Dialog
+      open={filterDialogOpen}
+      onClose={handleFilterDialogToggle}
+      PaperProps={{
+        sx: {
+          width: { xs: "95vw", sm: "450px" },
+          maxWidth: { xs: "95vw", sm: "450px" },
+          borderRadius: 2,
+          p: { xs: 1.5, sm: 2 },
+        }
+      }}
+    >
+      <Box sx={{ 
+        position: "relative", 
+        p: 0, 
+        pb: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }}>
+        <Typography variant="h6" sx={{ fontSize: '1.1rem', fontWeight: 600 }}>
+          Filter Appointments
+        </Typography>
+        <IconButton
+          aria-label="close"
+          onClick={handleFilterDialogToggle}
+          sx={{
+            color: (theme) => theme.palette.grey[500],
+            padding: '4px',
+          }}
+        >
+          <CloseIcon fontSize="small" />
+        </IconButton>
+      </Box>
+      <DialogContent sx={{ p: 0, pt: 1 }}>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontSize: '0.85rem' }}>
+            Status
+          </Typography>
+          <ToggleButtonGroup
+            value={filterStatus}
+            exclusive
+            onChange={(_, newValue) => {
+              if (newValue !== null) {
+                setFilterStatus(newValue);
+              }
+            }}
+            fullWidth
+            size="small"
+          >
+            <ToggleButton value="all" sx={{ fontSize: '0.75rem' }}>
+              All
+            </ToggleButton>
+            <ToggleButton value="pending" sx={{ fontSize: '0.75rem' }}>
+              Pending
+            </ToggleButton>
+            <ToggleButton value="done_checkup" sx={{ fontSize: '0.75rem' }}>
+              Completed
+            </ToggleButton>
+            <ToggleButton value="cancelled" sx={{ fontSize: '0.75rem' }}>
+              Cancelled
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontSize: '0.85rem' }}>
+            Payment
+          </Typography>
+          <ToggleButtonGroup
+            value={filterPaid}
+            exclusive
+            onChange={(_, newValue) => {
+              if (newValue !== null) {
+                setFilterPaid(newValue);
+              }
+            }}
+            fullWidth
+            size="small"
+          >
+            <ToggleButton value="all" sx={{ fontSize: '0.75rem' }}>
+              All
+            </ToggleButton>
+            <ToggleButton value="paid" sx={{ fontSize: '0.75rem' }}>
+              Paid
+            </ToggleButton>
+            <ToggleButton value="unpaid" sx={{ fontSize: '0.75rem' }}>
+              Unpaid
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontSize: '0.85rem' }}>
+            Presence
+          </Typography>
+          <ToggleButtonGroup
+            value={filterPresent}
+            exclusive
+            onChange={(_, newValue) => {
+              if (newValue !== null) {
+                setFilterPresent(newValue);
+              }
+            }}
+            fullWidth
+            size="small"
+          >
+            <ToggleButton value="all" sx={{ fontSize: '0.75rem' }}>
+              All
+            </ToggleButton>
+            <ToggleButton value="present" sx={{ fontSize: '0.75rem' }}>
+              Present
+            </ToggleButton>
+            <ToggleButton value="absent" sx={{ fontSize: '0.75rem' }}>
+              Absent
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+        
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontSize: '0.85rem' }}>
+            Timing
+          </Typography>
+          <ToggleButtonGroup
+            value={filterLate}
+            exclusive
+            onChange={(_, newValue) => {
+              if (newValue !== null) {
+                setFilterLate(newValue);
+              }
+            }}
+            fullWidth
+            size="small"
+          >
+            <ToggleButton value="all" sx={{ fontSize: '0.75rem' }}>
+              All
+            </ToggleButton>
+            <ToggleButton value="late" sx={{ fontSize: '0.75rem' }}>
+              Late
+            </ToggleButton>
+            <ToggleButton value="on-time" sx={{ fontSize: '0.75rem' }}>
+              On Time
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      </DialogContent>
+      <DialogActions>
+        <Button 
+          onClick={handleResetFilters} 
+          size="small"
+          sx={{ fontSize: '0.75rem' }}
+        >
+          Reset All
+        </Button>
+        <Button 
+          onClick={handleFilterDialogToggle}
+          variant="contained"
+          size="small"
+          sx={{ fontSize: '0.75rem' }}
+        >
+          Apply
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
     <Box sx={{ 
       padding: { xs: '6px 0px 80px 0px', sm: 2 },
@@ -1466,6 +1680,20 @@ export default function MobileAppointmentTable() {
         <IconButton
           color="primary"
           size="small"
+          onClick={handleFilterDialogToggle}
+          sx={{ 
+            p: 1,
+            bgcolor: 'rgba(25, 118, 210, 0.08)',
+            '&:hover': {
+              bgcolor: 'rgba(25, 118, 210, 0.15)',
+            }
+          }}
+        >
+          <FilterList fontSize="small" />
+        </IconButton>
+        <IconButton
+          color="primary"
+          size="small"
           onClick={handleSummaryModalToggle}
           sx={{ 
             p: 1,
@@ -1477,6 +1705,87 @@ export default function MobileAppointmentTable() {
         >
           <BarChart fontSize="small" />
         </IconButton>
+      </Box>
+
+      {/* Active filters display */}
+      {(filterStatus !== 'all' || filterPaid !== 'all' || filterPresent !== 'all' || filterLate !== 'all') && (
+        <Box sx={{ 
+          display: 'flex', 
+          flexWrap: 'wrap',
+          gap: 0.5, 
+          mt: 1,
+          px: { xs: 1.5, sm: 0 }
+        }}>
+          {filterStatus !== 'all' && (
+            <Chip
+              label={filterStatus === 'done_checkup' ? 'Completed' : 
+                    filterStatus === 'pending' ? 'Pending' : 
+                    filterStatus === 'cancelled' ? 'Cancelled' : filterStatus}
+              size="small"
+              onDelete={() => setFilterStatus('all')}
+              sx={{ height: '22px', fontSize: '0.7rem' }}
+            />
+          )}
+          {filterPaid !== 'all' && (
+            <Chip
+              label={filterPaid === 'paid' ? 'Paid' : 'Unpaid'}
+              size="small"
+              onDelete={() => setFilterPaid('all')}
+              sx={{ height: '22px', fontSize: '0.7rem' }}
+            />
+          )}
+          {filterPresent !== 'all' && (
+            <Chip
+              label={filterPresent === 'present' ? 'Present' : 'Absent'}
+              size="small"
+              onDelete={() => setFilterPresent('all')}
+              sx={{ height: '22px', fontSize: '0.7rem' }}
+            />
+          )}
+          {filterLate !== 'all' && (
+            <Chip
+              label={filterLate === 'late' ? 'Late' : 'On Time'}
+              size="small"
+              onDelete={() => setFilterLate('all')}
+              sx={{ height: '22px', fontSize: '0.7rem' }}
+            />
+          )}
+        </Box>
+      )}
+
+      {/* Patient count display */}
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        mt: (filterStatus !== 'all' || filterPaid !== 'all' || filterPresent !== 'all' || filterLate !== 'all') ? 1 : 2,
+        mb: 0.5,
+        px: { xs: 1.5, sm: 0 }
+      }}>
+        <Typography 
+          variant="body2" 
+          sx={{ 
+            fontSize: '0.75rem', 
+            color: 'text.secondary',
+            fontWeight: 500
+          }}
+        >
+          {filteredAppointments.length === 0 ? 'No patients' : 
+           filteredAppointments.length === 1 ? '1 patient' : 
+           `${filteredAppointments.length} patients`}
+        </Typography>
+        {searchQuery && (
+          <Typography 
+            variant="body2" 
+            sx={{ 
+              fontSize: '0.75rem', 
+              color: 'text.secondary',
+              fontWeight: 500
+            }}
+          >
+            Search results for "{searchQuery}"
+          </Typography>
+        )}
       </Box>
 
       {loading ? (
@@ -1581,6 +1890,22 @@ export default function MobileAppointmentTable() {
                     ) : (
                       <Typography variant="body1">
                         {appointment.patientName}
+                        {appointment.late && (
+                          <Box component="span" sx={{ 
+                            ml: 0.5, 
+                            display: 'inline-flex', 
+                            alignItems: 'center',
+                            backgroundColor: '#fff0f0',
+                            color: '#d32f2f',
+                            borderRadius: '4px',
+                            py: 0.2,
+                            px: 0.5,
+                            fontSize: '0.6rem',
+                            fontWeight: 500,
+                          }}>
+                            LATE
+                          </Box>
+                        )}
                       </Typography>
                     )}
                   </TableCell>
@@ -1678,6 +2003,9 @@ export default function MobileAppointmentTable() {
 
       {/* Summary Modal */}
       {renderSummaryModal()}
+      
+      {/* Filter Dialog */}
+      {renderFilterDialog()}
     </Box>
   );
 }
