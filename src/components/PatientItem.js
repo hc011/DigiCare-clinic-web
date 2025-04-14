@@ -38,10 +38,10 @@ import DragHandleIcon from "@mui/icons-material/DragHandle";
 
 // Add custom styles for clickable elements
 const clickableStyle = {
-  cursor: 'pointer',
-  transition: 'background-color 0.2s',
-  '&:hover': {
-    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+  cursor: "pointer",
+  transition: "background-color 0.2s",
+  "&:hover": {
+    backgroundColor: "rgba(0, 0, 0, 0.04)",
   },
 };
 
@@ -62,7 +62,6 @@ const PatientItem = ({
   const [loadingType, setLoadingType] = useState(null);
 
   // Remove debugger statement and add more useful debugging
-  
 
   // Determine if this is the current patient based on position
   // Force evaluate as numbers to ensure proper comparison
@@ -72,52 +71,61 @@ const PatientItem = ({
   const isCancelled = status === "cancelled";
   const isPending = status === "pending";
   console.log("late", late);
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
     isCurrent = parseInt(position) === parseInt(currentPosition);
-    console.log(`PatientItem ${position} - Current position: ${currentPosition}, isCurrent: ${position === currentPosition}`);
+    console.log(
+      `PatientItem ${position} - Current position: ${currentPosition}, isCurrent: ${
+        position === currentPosition
+      }`
+    );
   }, [position, currentPosition]);
 
   // Log the data structure for debugging
   useEffect(() => {
-    console.log('PatientItem received data:', {
+    console.log("PatientItem received data:", {
       position,
       appointment,
       late,
       currentPosition,
       paid,
       checkin,
-      status
+      status,
     });
   }, [position, appointment, late, currentPosition, paid, checkin, status]);
 
   // Add additional useEffect to detect changes in late status
   useEffect(() => {
-    console.log(`Patient ${position} (${appointment.name}) - Late status update:`, late);
+    console.log(
+      `Patient ${position} (${appointment.name}) - Late status update:`,
+      late
+    );
     // Force DOM update for mobile view when late status changes
     if (window.innerWidth <= 768 && !document.hidden) {
       // Add a data attribute to track late status directly on the DOM
-      const patientItem = document.querySelector(`.patient-item[data-appointment-id="${appointment.appointment_id}"]`);
+      const patientItem = document.querySelector(
+        `.patient-item[data-appointment-id="${appointment.appointment_id}"]`
+      );
       if (patientItem) {
         patientItem.dataset.late = late ? "true" : "false";
-        
+
         // Update class to ensure CSS styling
         if (late) {
           patientItem.classList.add("late");
         } else {
           patientItem.classList.remove("late");
         }
-        
+
         // Find the status tags container and ensure late chip exists if needed
-        const statusTags = patientItem.querySelector('.status-tags');
+        const statusTags = patientItem.querySelector(".status-tags");
         if (statusTags) {
-          const existingLateChip = statusTags.querySelector('.late-chip');
-          
+          const existingLateChip = statusTags.querySelector(".late-chip");
+
           if (late && !existingLateChip) {
             // If we should have a late chip but don't, try to force render it
-            const lateChipContainer = document.createElement('div');
-            lateChipContainer.className = 'late-chip-container';
+            const lateChipContainer = document.createElement("div");
+            lateChipContainer.className = "late-chip-container";
             lateChipContainer.innerHTML = `
               <span class="late-chip MuiChip-root MuiChip-outlined MuiChip-sizeSmall MuiChip-colorError">
                 <span class="MuiChip-icon"><span class="material-icons MuiIcon-root MuiIcon-fontSizeSmall">access_time</span></span>
@@ -150,29 +158,29 @@ const PatientItem = ({
   const handlePatientClick = (e) => {
     // Prevent click if we're dragging
     if (isDragging) return;
-    
+
     // Prevent click if we clicked on a button inside the item
-    if (e.target.closest('button') || e.target.closest('.MuiIconButton-root')) {
+    if (e.target.closest("button") || e.target.closest(".MuiIconButton-root")) {
       return;
     }
-    
+
     // Log the appointment data to see what's available
-    console.log('Appointment data for patient click:', appointment);
-    
+    console.log("Appointment data for patient click:", appointment);
+
     // Get patient ID either from patient object or appointment
     const patientId = appointment.patient?.patient_id || appointment.patient_id;
-    
+
     // Get appointment ID
     const appointmentId = appointment.appointment_id;
-    
+
     // Note: We're no longer checking if patient ID exists
     // We'll let the PatientInfoPage handle cases with missing patient info
-    
+
     // Navigate to the patient info page with information available
-    navigate('/patient-info', { 
-      state: { 
+    navigate("/patient-info", {
+      state: {
         patientInfo: {
-          id: patientId  // This may be null for some patients
+          id: patientId, // This may be null for some patients
         },
         appointmentInfo: {
           id: appointmentId,
@@ -182,13 +190,15 @@ const PatientItem = ({
           name: appointment.name,
           disease: appointment.disease,
           appointment_type: appointment.appointment_type,
-          guardian: appointment.guardian || (appointment.patient ? appointment.patient.guardian : null)
+          guardian:
+            appointment.guardian ||
+            (appointment.patient ? appointment.patient.guardian : null),
         },
         position: position,
         late: late,
         status: status,
-        appointment: appointment
-      } 
+        appointment: appointment,
+      },
     });
   };
 
@@ -196,7 +206,7 @@ const PatientItem = ({
     if (confirmAction === "next") {
       setLoadingType("next");
       try {
-          await handleNextPatient(appointment.appointment_id);
+        await handleNextPatient(appointment.appointment_id);
       } catch (error) {
         console.error("Error marking patient as done:", error);
       } finally {
@@ -209,8 +219,8 @@ const PatientItem = ({
         await handleLatePatient(appointment.appointment_id, position);
       } catch (error) {
         console.error("Error marking patient as late:", error);
-    } finally {
-      setLoadingType(null);
+      } finally {
+        setLoadingType(null);
         setConfirmAction(null);
       }
     }
@@ -218,36 +228,48 @@ const PatientItem = ({
 
   return (
     <>
-    <div
-      ref={setNodeRef}
+      <div
+        ref={setNodeRef}
         style={{
           transform: CSS.Transform.toString(transform),
           transition,
           opacity: isDragging ? 0.5 : 1,
-          cursor: 'pointer',
-          WebkitTapHighlightColor: 'rgba(0,0,0,0)', // Remove default tap highlight on mobile
+          cursor: "pointer",
+          WebkitTapHighlightColor: "rgba(0,0,0,0)", // Remove default tap highlight on mobile
         }}
-        className={`patient-item ${isCurrent ? "current" : ""} ${late ? "late" : ""} ${
-          isDone ? "done" : ""
-        } ${isCancelled ? "cancelled" : ""} ${isPending ? "pending" : ""}`}
+        className={`patient-item ${isCurrent ? "current" : ""} ${
+          late ? "late" : ""
+        } ${isDone ? "done" : ""} ${isCancelled ? "cancelled" : ""} ${
+          isPending ? "pending" : ""
+        }`}
         onClick={handlePatientClick} // Add the click handler
         data-paid={paid ? "true" : "false"}
         data-present={checkin ? "true" : "false"}
         data-late={late ? "true" : "false"}
         data-appointment-id={appointment.appointment_id}
         data-draggable={isDraggable ? "true" : "false"}
-    >
-      <div className="patient-content">
-          <div className={`token-badge ${isCurrent ? "current-token" : ""} ${late ? "late-token" : ""} ${status === "cancelled" ? "cancelled-token" : ""}`}>
-            <span>#{position === -1 ? appointment.token : (appointment.token || position)}</span>
+      >
+        <div className="patient-content">
+          <div
+            className={`token-badge ${isCurrent ? "current-token" : ""} ${
+              late ? "late-token" : ""
+            } ${status === "cancelled" ? "cancelled-token" : ""}`}
+          >
+            <span>
+              #
+              {position === -1
+                ? appointment.token
+                : appointment.token || position}
+            </span>
           </div>
 
           <div className="patient-details">
             <div className="patient-header">
               <Typography variant="h6" component="h3">
                 {appointment.name || "Unknown Patient"}
+                (position: {position})
               </Typography>
-              
+
               <div className="status-tags">
                 {/* Add check-in status */}
                 {checkin ? (
@@ -267,7 +289,7 @@ const PatientItem = ({
                     variant="outlined"
                   />
                 )}
-                
+
                 {/* Add payment status */}
                 {paid ? (
                   <Chip
@@ -286,7 +308,7 @@ const PatientItem = ({
                     variant="outlined"
                   />
                 )}
-                
+
                 {late && (
                   <Chip
                     icon={<AccessTime fontSize="small" />}
@@ -295,7 +317,7 @@ const PatientItem = ({
                     color="error"
                     variant="outlined"
                     className="late-chip"
-                    sx={{ fontWeight: 'bold' }}
+                    sx={{ fontWeight: "bold" }}
                   />
                 )}
                 {isDone && (
@@ -320,17 +342,26 @@ const PatientItem = ({
             </div>
 
             {/* Guardian name if available */}
-            {(appointment.guardian || (appointment.patient && appointment.patient.guardian)) && (
-              <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5, color: 'text.secondary' }}>
+            {(appointment.guardian ||
+              (appointment.patient && appointment.patient.guardian)) && (
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  mt: 0.5,
+                  color: "text.secondary",
+                }}
+              >
                 <SupervisorAccount fontSize="small" sx={{ mr: 0.5 }} />
                 <Typography variant="body2">
-                  Guardian: {appointment.patient?.guardian || appointment.guardian}
+                  Guardian:{" "}
+                  {appointment.patient?.guardian || appointment.guardian}
                 </Typography>
               </Box>
             )}
           </div>
-          
-          <div className="action-buttons" style={{ background: 'transparent' }}>
+
+          <div className="action-buttons" style={{ background: "transparent" }}>
             {/* Mark Done button - show for all patients that aren't already done */}
             {!isDone && checkin && (
               <Tooltip title="Mark as Done">
@@ -354,7 +385,7 @@ const PatientItem = ({
                 </MuiButton>
               </Tooltip>
             )}
-            
+
             {/* Mark Late button - show for all patients that aren't already late or done */}
             {!isDone && isCurrent && (
               <Tooltip title="Mark as Late">
@@ -367,7 +398,7 @@ const PatientItem = ({
                     e.stopPropagation();
                     setConfirmAction("late");
                   }}
-                  sx={{ backgroundColor: 'white' }}
+                  sx={{ backgroundColor: "white" }}
                 >
                   {loadingType === "late" ? (
                     <CircularProgress size={20} color="inherit" />
@@ -378,10 +409,12 @@ const PatientItem = ({
               </Tooltip>
             )}
           </div>
-          
-          {checkin && isDraggable && <div className="drag-handle" {...attributes} {...listeners}>
-            <DragHandleIcon />
-          </div>}
+
+          {checkin && isDraggable && (
+            <div className="drag-handle" {...attributes} {...listeners}>
+              <DragHandleIcon />
+            </div>
+          )}
         </div>
       </div>
 
