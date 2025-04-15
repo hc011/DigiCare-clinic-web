@@ -16,11 +16,13 @@ import {
   Box,
   Autocomplete,
   Paper,
+  IconButton,
 } from "@mui/material";
 import { addAppointment, fetchAppointments, getPatientProfile, getMaxTokenNumber } from "../services/api";
 import { getCabinInfo } from "../utils/dateUtils";
 import "./AddAppointmentMobile.css";
 import { useNotification } from "../context/NotificationContext";
+import CloseIcon from '@mui/icons-material/Close';
 
 export default function AddAppointmentMobile({ patients }) {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -401,6 +403,7 @@ export default function AddAppointmentMobile({ patients }) {
         <Box sx={{ mb: 1 }}>
           <Autocomplete
             fullWidth
+            disableClearable
             options={mobileSearchResults}
             getOptionLabel={(option) => {
               // Handle both objects from dropdown and direct string input
@@ -439,6 +442,41 @@ export default function AddAppointmentMobile({ patients }) {
               }
             }}
             freeSolo={true}
+            ListboxProps={{
+              style: { maxHeight: '400px' }
+            }}
+            ListboxComponent={(props) => (
+              <div 
+                {...props}
+                style={{
+                  ...props.style,
+                  position: 'relative'
+                }}
+              >
+                {mobileSearchResults.length > 0 && (
+                  <IconButton
+                    size="small"
+                    onClick={() => setMobileSearchResults([])}
+                    sx={{ 
+                      position: 'absolute',
+                      right: 4,
+                      top: 4,
+                      p: 0.5,
+                      minWidth: '24px',
+                      minHeight: '24px',
+                      zIndex: 2,
+                      bgcolor: 'background.paper',
+                      '&:hover': {
+                        bgcolor: 'action.hover'
+                      }
+                    }}
+                  >
+                    <CloseIcon sx={{ fontSize: '1rem' }} />
+                  </IconButton>
+                )}
+                {props.children}
+              </div>
+            )}
             renderInput={(params) => (
               <TextField
                 {...params}
@@ -502,7 +540,10 @@ export default function AddAppointmentMobile({ patients }) {
                 inputProps={{
                   ...params.inputProps,
                   maxLength: 10,
-                  value: formData.phone_number || ""
+                  value: formData.phone_number || "",
+                  type: "tel",
+                  pattern: "[0-9]*",
+                  inputMode: "numeric"
                 }}
                 InputProps={{
                   ...params.InputProps,

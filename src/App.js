@@ -1,4 +1,10 @@
-import React,  { useContext, useEffect, useState, useCallback, createContext } from "react";
+import React, {
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  createContext,
+} from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { Box } from "@mui/material";
 import { AuthContext } from "./context/AuthContext";
@@ -26,41 +32,40 @@ import AppointmentDetails from "./Pages/AppointmentDetails";
 import webSocketService from "./services/websocketService";
 import ManageSlot from "./Pages/ManageSlot";
 
-import {
-  fetchPatients,
-  fetchCurrentPosition,
-} from "./services/api";
+import { fetchPatients, fetchCurrentPosition } from "./services/api";
 
-import { ThemeProvider } from '@mui/material/styles';
-import { theme } from './theme/theme';
-import Dashboard from './Pages/Dashboard';
-import { getCabinInfo} from './utils/dateUtils';
-import PatientInfoPage from './Pages/PatientInfoPage';
-import ConsultationPage from './Pages/ConsultationPage';
-import PDFViewer from './components/PDFViewer';
-import usePDFViewer from './hooks/usePDFViewer';
-import { useCheckupCabin } from './context/CheckupCabinContext';
+import { ThemeProvider } from "@mui/material/styles";
+import { theme } from "./theme/theme";
+import Dashboard from "./Pages/Dashboard";
+import { getCabinInfo } from "./utils/dateUtils";
+import PatientInfoPage from "./Pages/PatientInfoPage";
+import ConsultationPage from "./Pages/ConsultationPage";
+import PDFViewer from "./components/PDFViewer";
+import usePDFViewer from "./hooks/usePDFViewer";
+import { useCheckupCabin } from "./context/CheckupCabinContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 const App = () => {
   const user = JSON.parse(localStorage.getItem("user"));
-  
+
   // Get values directly from the context
   const { isInitialized, cabinId, selectedSlot } = useCheckupCabin();
-  
+
   const isMobile = window.innerWidth <= 768;
   const [currentPosition, setCurrentPosition] = useState(1);
   const [patients, setPatients] = useState([]);
   const [queueList, setQueueList] = useState([]);
   const [currentPatient, setCurrentPatient] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [currentCabinSlot, setCurrentCabinSlot] = useState("2024-03-10T09:00:00.000Z");
+  const [currentCabinSlot, setCurrentCabinSlot] = useState(
+    "2024-03-10T09:00:00.000Z"
+  );
   const { pdfViewerState, openPdfViewer, closePdfViewer } = usePDFViewer();
-  
+
   // Get user from AuthContext instead of localStorage to ensure re-renders
   const { user: authUser } = useContext(AuthContext);
-  
+
   // Use authUser for conditional rendering
   const currentUser = authUser || user;
 
@@ -73,23 +78,29 @@ const App = () => {
 
     // Handle visibility changes
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('Tab is now visible, checking WebSocket connection state');        
+      if (document.visibilityState === "visible") {
+        console.log("Tab is now visible, checking WebSocket connection state");
         // Use the new connection checking method that handles inactivity reconnection
-        const { shouldReload, connectionState } = webSocketService.checkConnection();
-        console.log('checkConnection result:', { shouldReload, connectionState });
-        
+        const { shouldReload, connectionState } =
+          webSocketService.checkConnection();
+        console.log("checkConnection result:", {
+          shouldReload,
+          connectionState,
+        });
+
         if (shouldReload) {
-          console.log('Connection was closed due to inactivity, reloading page');
+          console.log(
+            "Connection was closed due to inactivity, reloading page"
+          );
           // Reset the flag before reloading to ensure it's in the correct state
           webSocketService.wasClosedDueToInactivity = false;
           window.location.reload();
           return;
         }
-        
+
         // Original reconnection logic for other cases
         if (!webSocketService.ws || connectionState === WebSocket.CLOSED) {
-          console.log('WebSocket connection needs to be re-established');
+          console.log("WebSocket connection needs to be re-established");
           webSocketService.reconnectAttempt = 0;
           webSocketService.connect(cabinId, selectedSlot);
         }
@@ -98,16 +109,16 @@ const App = () => {
 
     // Add beforeunload event to force close the WebSocket when page unloads
     const handleBeforeUnload = () => {
-      console.log('Page is being unloaded, force closing WebSocket connection');
+      console.log("Page is being unloaded, force closing WebSocket connection");
       webSocketService.disconnect(true); // Force close the connection
     };
 
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       webSocketService.disconnect();
     };
   }, [cabinId, selectedSlot, currentUser]);
@@ -117,54 +128,62 @@ const App = () => {
     if (!cabinId || !selectedSlot || !currentUser) return;
 
     console.log("Setting up WebSocket subscription for queue updates in App");
-    
+
     // Subscribe to queue updates
-    const unsubscribe = webSocketService.subscribe('queue', (response) => {
+    const unsubscribe = webSocketService.subscribe("queue", (response) => {
       console.log("Received queue update via WebSocket in App:", response);
-      
+
       try {
         // Check for the right message format
         let queueData = null;
         let cabinslotData = null;
-        if (response.data && response.data.type === "queue_update" && response.data.data) {
+        if (
+          response.data &&
+          response.data.type === "queue_update" &&
+          response.data.data
+        ) {
           // Check for queue update
           if (response.data.data.queue) {
             queueData = response.data.data.queue;
           }
-          
+
           // Check for cabinslot update
           if (response.data.data.cabinslot) {
             cabinslotData = response.data.data.cabinslot;
           }
         }
-        
+
         // Handle queue data
         if (queueData) {
           console.log("Processing queue update:", queueData);
-          
-          setQueueList(prevQueueList => {
+
+          setQueueList((prevQueueList) => {
             const existingPatientIndex = prevQueueList.findIndex(
-              p => p.appointment?.appointment_id === queueData.appointment?.appointment_id
+              (p) =>
+                p.appointment?.appointment_id ===
+                queueData.appointment?.appointment_id
             );
-            if(existingPatientIndex !== -1){
+            if (existingPatientIndex !== -1) {
               const updatedPatients = [...prevQueueList];
               updatedPatients[existingPatientIndex] = {
                 ...updatedPatients[existingPatientIndex],
-                ...queueData
+                ...queueData,
               };
               return updatedPatients;
             } else {
               return [...prevQueueList, queueData];
             }
-          })
-            // Update patient state
-            setPatients(prevPatients => {
-              // Find if the updated patient already exists in our list
-              if(queueData.appointment === null){
-                return prevPatients.filter(p => p.type == "patient");
-              }
+          });
+          // Update patient state
+          setPatients((prevPatients) => {
+            // Find if the updated patient already exists in our list
+            if (queueData.appointment === null) {
+              return prevPatients.filter((p) => p.appointment != null);
+            }
             const existingPatientIndex = prevPatients.findIndex(
-              p => p.appointment?.appointment_id === queueData.appointment?.appointment_id
+              (p) =>
+                p.appointment?.appointment_id ===
+                queueData.appointment?.appointment_id
             );
             // If appointment data exists in the queue update
             if (queueData.appointment) {
@@ -175,7 +194,7 @@ const App = () => {
                 paid: queueData.paid,
                 checkin: queueData.checkin,
                 late: queueData.late,
-                type: queueData.type
+                type: queueData.type,
               };
 
               if (existingPatientIndex !== -1) {
@@ -183,25 +202,30 @@ const App = () => {
                 const updatedPatients = [...prevPatients];
                 updatedPatients[existingPatientIndex] = {
                   ...updatedPatients[existingPatientIndex],
-                  ...updatedPatient
+                  ...updatedPatient,
                 };
-                return updatedPatients.filter(p => p.type == "patient");
+                return updatedPatients.filter((p) => p.appointment != null);
               } else {
                 // Add new patient to the list
-                return [...prevPatients, updatedPatient].filter(p => p.type == "patient");
+                return [...prevPatients, updatedPatient].filter(
+                  (p) => p.appointment != null
+                );
               }
             }
-            
-            return prevPatients.filter(p => p.type == "patient");
+
+            return prevPatients.filter((p) => p.appointment != null);
           });
         }
-        
+
         // Handle cabinslot data
         if (cabinslotData) {
           console.log("Processing cabinslot update:", cabinslotData);
           // Update current position if current_number is provided
           if (cabinslotData.current_number !== undefined) {
-            console.log("Updating current position to:", cabinslotData.current_number);
+            console.log(
+              "Updating current position to:",
+              cabinslotData.current_number
+            );
             setCurrentPosition(parseInt(cabinslotData.current_number));
           }
         }
@@ -220,13 +244,20 @@ const App = () => {
     const fetchInitialData = async () => {
       setLoading(true);
       console.log("Fetching initial data with:", cabinId, selectedSlot);
-      try {            
+      try {
         const patients = await fetchPatients(cabinId, selectedSlot);
         console.log("Fetched patients:", patients);
         setQueueList(patients);
-        setPatients(patients.filter(p => p.type == "patient").filter(p => p.position !== -1));
-        
-        const { current_number } = await fetchCurrentPosition(cabinId, selectedSlot);
+        setPatients(
+          patients
+            .filter((p) => p.appointment != null)
+            .filter((p) => p.position !== -1)
+        );
+
+        const { current_number } = await fetchCurrentPosition(
+          cabinId,
+          selectedSlot
+        );
         setCurrentPosition(current_number);
       } catch (error) {
         console.error("Error loading initial data:", error);
@@ -237,10 +268,17 @@ const App = () => {
 
     // Only fetch initial data when context is initialized and we have the required values
     if (isInitialized && cabinId && selectedSlot) {
-      console.log("CheckupCabinContext is initialized with valid cabin data, running fetchInitialData");
+      console.log(
+        "CheckupCabinContext is initialized with valid cabin data, running fetchInitialData"
+      );
       fetchInitialData();
     } else if (isInitialized) {
-      console.log("CheckupCabinContext is initialized but missing required data - cabinId:", cabinId, "selectedSlot:", selectedSlot);
+      console.log(
+        "CheckupCabinContext is initialized but missing required data - cabinId:",
+        cabinId,
+        "selectedSlot:",
+        selectedSlot
+      );
     }
   }, [isInitialized, cabinId, selectedSlot]);
 
@@ -256,10 +294,10 @@ const App = () => {
       <NotificationProvider>
         <ThemeProvider theme={theme}>
           <Router>
-            <Box sx={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-              {currentUser !== null && (
-                <Header />
-              )}
+            <Box
+              sx={{ display: "flex", flexDirection: "column", height: "100vh" }}
+            >
+              {currentUser !== null && <Header />}
               <Box
                 sx={{
                   display: "flex",
@@ -282,11 +320,17 @@ const App = () => {
                   <Routes>
                     <Route
                       path="/login"
-                      element={currentUser ? (
-                        isMobile ? 
-                          <Navigate to="/mobile-queue" replace /> : 
-                          <Navigate to="/" replace />
-                      ) : <Login />}
+                      element={
+                        currentUser ? (
+                          isMobile ? (
+                            <Navigate to="/mobile-queue" replace />
+                          ) : (
+                            <Navigate to="/" replace />
+                          )
+                        ) : (
+                          <Login />
+                        )
+                      }
                     />
                     <Route
                       path="/"
@@ -295,7 +339,7 @@ const App = () => {
                           {isMobile ? (
                             <Navigate to="/mobile-queue" replace />
                           ) : (
-                            // <Dashboard 
+                            // <Dashboard
                             //   patients={patients}
                             //   setPatients={setPatients}
                             //   currentPosition={currentPosition}
@@ -385,7 +429,13 @@ const App = () => {
                             queueList={queueList}
                             currentPosition={currentPosition}
                             patients={patients}
-                            setPatients={(patients) => setPatients(patients.filter(p => p.type == "patient").filter(p => p.position !== -1))}
+                            setPatients={(patients) =>
+                              setPatients(
+                                patients
+                                  .filter((p) => p.appointment != null)
+                                  .filter((p) => p.position !== -1)
+                              )
+                            }
                             loading={loading}
                           />
                         </PrivateRoute>
@@ -403,10 +453,10 @@ const App = () => {
                       path="/mobile-queue"
                       element={
                         <PrivateRoute>
-                          <MobileQueuePage 
+                          <MobileQueuePage
                             queueList={queueList}
-                            patientsData={patients} 
-                            currentPositionData={currentPosition} 
+                            patientsData={patients}
+                            currentPositionData={currentPosition}
                             loading={loading}
                           />
                         </PrivateRoute>
@@ -420,16 +470,19 @@ const App = () => {
                         </PrivateRoute>
                       }
                     />
-                    
-                    <Route path="*" element={<Navigate to="/login" replace />} />
+
+                    <Route
+                      path="*"
+                      element={<Navigate to="/login" replace />}
+                    />
                   </Routes>
                 </Box>
               </Box>
               {currentUser !== null && isMobile && <BottomNavigator />}
-              
+
               {/* Global appointment form - available from anywhere */}
               <AppointmentForm />
-              
+
               {/* PDF Viewer for reports/prescriptions */}
               {pdfViewerState.open && (
                 <PDFViewer
@@ -450,17 +503,17 @@ const App = () => {
 // Export the PDF viewer context to make it available throughout the app
 export const PDFViewerContext = React.createContext({
   openPdfViewer: () => {},
-  closePdfViewer: () => {}
+  closePdfViewer: () => {},
 });
 
 // Create a PDF viewer provider component
 export const PDFViewerProvider = ({ children }) => {
   const pdfViewerHook = usePDFViewer();
-  
+
   return (
     <PDFViewerContext.Provider value={pdfViewerHook}>
       {children}
-      <PDFViewer 
+      <PDFViewer
         open={pdfViewerHook.pdfViewerState.open}
         onClose={pdfViewerHook.closePdfViewer}
         pdfUrl={pdfViewerHook.pdfViewerState.pdfUrl}
