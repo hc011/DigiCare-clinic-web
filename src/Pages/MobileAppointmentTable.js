@@ -124,6 +124,7 @@ export default function MobileAppointmentTable() {
   // State for editing appointment
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+  const [originalAppointment, setOriginalAppointment] = useState(null);
   const [originalCheckinState, setOriginalCheckinState] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState(null);
@@ -131,7 +132,9 @@ export default function MobileAppointmentTable() {
   // State for validation errors
   const [validationErrors, setValidationErrors] = useState({
     payment: false,
-    mobileNumber: false
+    mobileNumber: false,
+    firstName: false,
+    lastName: false
   });
   
   // Add state to track if mobile field has been touched
@@ -227,6 +230,7 @@ export default function MobileAppointmentTable() {
     // Store the original checkin state to determine if it was changed during this edit session
     setOriginalCheckinState(row.checkin);
     setSelectedAppointment(formattedRow);
+    setOriginalAppointment(formattedRow); // Store original appointment data
     setEditModalOpen(true);
   };
 
@@ -234,10 +238,38 @@ export default function MobileAppointmentTable() {
   const handleEditModalClose = () => {
     setEditModalOpen(false);
     setSelectedAppointment(null);
+    setOriginalAppointment(null);
     setUpdateError(null);
     setOriginalCheckinState(false);
-    setValidationErrors({ payment: false, mobileNumber: false });
+    setValidationErrors({ 
+      payment: false, 
+      mobileNumber: false,
+      firstName: false,
+      lastName: false 
+    });
     setMobileFieldTouched(false);
+  };
+
+  // Function to check if any changes were made to the appointment
+  const hasAppointmentChanged = () => {
+    if (!selectedAppointment || !originalAppointment) return false;
+
+    // Compare all relevant fields
+    return (
+      selectedAppointment.phone_number !== originalAppointment.phone_number ||
+      selectedAppointment.firstName !== originalAppointment.firstName ||
+      selectedAppointment.lastName !== originalAppointment.lastName ||
+      selectedAppointment.age !== originalAppointment.age ||
+      selectedAppointment.sex !== originalAppointment.sex ||
+      selectedAppointment.location !== originalAppointment.location ||
+      selectedAppointment.guardian !== originalAppointment.guardian ||
+      selectedAppointment.disease !== originalAppointment.disease ||
+      selectedAppointment.paid !== originalAppointment.paid ||
+      selectedAppointment.mode !== originalAppointment.mode ||
+      selectedAppointment.fees_paid !== originalAppointment.fees_paid ||
+      selectedAppointment.appointment_type !== originalAppointment.appointment_type ||
+      selectedAppointment.checkin !== originalAppointment.checkin
+    );
   };
 
   // Handle edit form submission
@@ -245,21 +277,35 @@ export default function MobileAppointmentTable() {
     if (!selectedAppointment) return;
     
     // Reset validation errors
-    setValidationErrors({ payment: false, mobileNumber: false });
+    setValidationErrors({ 
+      payment: false, 
+      mobileNumber: false,
+      firstName: false,
+      lastName: false 
+    });
     
     // Check for validation errors
     const paymentMissing = selectedAppointment.checkin && !selectedAppointment.paid;
     const mobileMissing = selectedAppointment.checkin && 
       (!selectedAppointment.phone_number || selectedAppointment.phone_number.trim() === '');
+    const firstNameMissing = !selectedAppointment.firstName || selectedAppointment.firstName.trim() === '';
+    const lastNameMissing = !selectedAppointment.lastName || selectedAppointment.lastName.trim() === '';
     
-    if (paymentMissing || mobileMissing) {
+    if (paymentMissing || mobileMissing || firstNameMissing || lastNameMissing) {
       // Set validation errors
       setValidationErrors({
         payment: paymentMissing,
-        mobileNumber: mobileMissing
+        mobileNumber: mobileMissing,
+        firstName: firstNameMissing,
+        lastName: lastNameMissing
       });
       
       // Show appropriate snackbar message
+      if (firstNameMissing || lastNameMissing) {
+        showWarningSnackbar("Please enter both first name and last name", 3000);
+        return;
+      }
+      
       if (paymentMissing && mobileMissing) {
         showWarningSnackbar("Please complete both payment details and mobile number before marking patient as present", 3000);
       } else if (paymentMissing) {
@@ -737,6 +783,7 @@ export default function MobileAppointmentTable() {
                 }}
                 freeSolo={true}
                 size="small"
+                disableClearable={true}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -798,7 +845,10 @@ export default function MobileAppointmentTable() {
                       ...params.inputProps,
                       maxLength: 10,
                       value: selectedAppointment.phone_number || "",
-                      style: { fontSize: '0.85rem' }
+                      style: { fontSize: '0.85rem' },
+                      inputMode: 'numeric',
+                      pattern: '[0-9]*',
+                      type: 'tel'
                     }}
                     InputLabelProps={{ 
                       style: { 
@@ -857,28 +907,50 @@ export default function MobileAppointmentTable() {
             }}>
               <TextField
                 fullWidth
+                required
                 label="First Name"
                 value={selectedAppointment.firstName || ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
                   setSelectedAppointment((prev) => ({
                     ...prev,
-                    firstName: e.target.value,
-                  }))
-                }
+                    firstName: value,
+                  }));
+                  // Clear validation error when user starts typing
+                  if (value.trim() !== '') {
+                    setValidationErrors(prev => ({
+                      ...prev,
+                      firstName: false
+                    }));
+                  }
+                }}
+                error={validationErrors.firstName}
+                helperText={validationErrors.firstName ? "First name is required" : ""}
                 InputProps={{ style: { fontSize: '0.85rem' } }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
               />
               <TextField
                 fullWidth
+                required
                 label="Last Name"
                 value={selectedAppointment.lastName || ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
                   setSelectedAppointment((prev) => ({
                     ...prev,
-                    lastName: e.target.value,
-                  }))
-                }
+                    lastName: value,
+                  }));
+                  // Clear validation error when user starts typing
+                  if (value.trim() !== '') {
+                    setValidationErrors(prev => ({
+                      ...prev,
+                      lastName: false
+                    }));
+                  }
+                }}
+                error={validationErrors.lastName}
+                helperText={validationErrors.lastName ? "Last name is required" : ""}
                 InputProps={{ style: { fontSize: '0.85rem' } }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
@@ -984,7 +1056,8 @@ export default function MobileAppointmentTable() {
                     variant="body2" 
                     sx={{ 
                       fontWeight: selectedAppointment.checkin ? 'bold' : 'normal',
-                      color: selectedAppointment.checkin ? 'primary.main' : 'text.primary',
+                      color: originalCheckinState ? 'text.disabled' :
+                             selectedAppointment.checkin ? 'primary.main' : 'text.primary',
                       fontSize: '0.85rem'
                     }}
                   >
@@ -1206,7 +1279,7 @@ export default function MobileAppointmentTable() {
               color="primary"
               size="small"
               sx={{ height: "28px", fontSize: "0.75rem" }}
-              disabled={isUpdating}
+              disabled={isUpdating || !hasAppointmentChanged()}
             >
               {isUpdating ? <CircularProgress size={12} /> : "Update"}
             </Button>
