@@ -21,7 +21,6 @@ import {
 } from "../services/api";
 import "./MobileQueuePage.css";
 import { getCabinInfo } from "../utils/dateUtils";
-import fixMobilePatientItems from "../components/MobilePatientItemFix";
 
 const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, loading, queueList }) => {
   const [patients, setPatients] = useState([]);
@@ -42,11 +41,7 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
       setDataLoaded(true);
       setLocalLoading(false);
       
-      // Apply the mobile fix after React has had time to render the updated data
-      // Use a slightly longer timeout to ensure React has completed rendering
-      if (patientsData && patientsData.length > 0) {
-        setTimeout(fixMobilePatientItems, 500);
-      }
+      // No need to apply the mobile fix anymore since PatientItem handles it natively
     }
     
     if (currentPositionData !== undefined) {
@@ -70,21 +65,8 @@ const MobileQueuePage = ({ patientsData, currentPositionData, onDataChange, load
     return () => clearTimeout(timer);
   }, [localLoading]);
   
-  // Apply mobile layout fix on mount and window resize
-  useEffect(() => {
-    // Initial fix application after component mounts
-    setTimeout(fixMobilePatientItems, 500);
-    
-    const handleResize = () => {
-      if (window.innerWidth <= 768) {
-        setTimeout(fixMobilePatientItems, 500);
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
+  // No need for the mobile layout fix useEffect anymore since PatientItem handles it natively
+  
   const handleNextPatient = async (id) => {
     try {
       // Don't set localLoading here since PatientItem has its own loading state
