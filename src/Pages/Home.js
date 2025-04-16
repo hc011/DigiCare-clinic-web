@@ -26,6 +26,8 @@ export default function Home({
   loading,
   queueList
 }) {
+  const user = JSON.parse(localStorage.getItem('user'));
+  const doctor = user.checkupcabindata[0].doctor;
   const isMobile = useMediaQuery("(max-width: 768px)");
   const currentPatient = patients.find((p) => parseInt(p.position) === parseInt(currentPosition));
 
@@ -69,7 +71,7 @@ export default function Home({
         <div
           style={{ display: "flex", flexDirection: "column", flexGrow: "3" }}
         >
-          {!isMobile && <DoctorHeader doctorName="Dr. Amit Mittal" />}{" "}
+          {!isMobile && <DoctorHeader doctorName={doctor} />}{" "}
           <QueueContainer
             loading={loading}
             patients={patients}
