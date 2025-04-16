@@ -17,7 +17,6 @@ import {
   Autocomplete,
   Paper,
   IconButton,
-  ListSubheader,
 } from "@mui/material";
 import { addAppointment, fetchAppointments, getPatientProfile, getMaxTokenNumber } from "../services/api";
 import { getCabinInfo } from "../utils/dateUtils";

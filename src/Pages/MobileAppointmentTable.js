@@ -749,6 +749,8 @@ export default function MobileAppointmentTable() {
                 loading={isEditSearching}
                 value={selectedAppointment.phone_number || ""}
                 onChange={(_, newValue) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   if (typeof newValue === 'object') {
                     handleEditPatientSelect(newValue);
                     // Clear mobile number validation error when a patient is selected
@@ -789,6 +791,8 @@ export default function MobileAppointmentTable() {
                     {...params}
                     label="Mobile"
                     onChange={(e) => {
+                      if (selectedAppointment?.status === "cancelled") return;
+                      
                       const value = e.target.value;
                       setSelectedAppointment(prev => ({
                         ...prev,
@@ -846,6 +850,7 @@ export default function MobileAppointmentTable() {
                       maxLength: 10,
                       value: selectedAppointment.phone_number || "",
                       style: { fontSize: '0.85rem' },
+                      readOnly: selectedAppointment?.status === "cancelled",
                       inputMode: 'numeric',
                       pattern: '[0-9]*',
                       type: 'tel'
@@ -911,6 +916,8 @@ export default function MobileAppointmentTable() {
                 label="First Name"
                 value={selectedAppointment.firstName || ""}
                 onChange={(e) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   const value = e.target.value.toUpperCase();
                   setSelectedAppointment((prev) => ({
                     ...prev,
@@ -926,9 +933,13 @@ export default function MobileAppointmentTable() {
                 }}
                 error={validationErrors.firstName}
                 helperText={validationErrors.firstName ? "First name is required" : ""}
-                InputProps={{ style: { fontSize: '0.85rem' } }}
+                InputProps={{ 
+                  style: { fontSize: '0.85rem' },
+                  readOnly: selectedAppointment?.status === "cancelled"
+                }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
+                disabled={selectedAppointment?.status === "cancelled"}
               />
               <TextField
                 fullWidth
@@ -936,6 +947,8 @@ export default function MobileAppointmentTable() {
                 label="Last Name"
                 value={selectedAppointment.lastName || ""}
                 onChange={(e) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   const value = e.target.value.toUpperCase();
                   setSelectedAppointment((prev) => ({
                     ...prev,
@@ -951,9 +964,13 @@ export default function MobileAppointmentTable() {
                 }}
                 error={validationErrors.lastName}
                 helperText={validationErrors.lastName ? "Last name is required" : ""}
-                InputProps={{ style: { fontSize: '0.85rem' } }}
+                InputProps={{ 
+                  style: { fontSize: '0.85rem' },
+                  readOnly: selectedAppointment?.status === "cancelled"
+                }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
+                disabled={selectedAppointment?.status === "cancelled"}
               />
             </Box>
 
@@ -969,6 +986,8 @@ export default function MobileAppointmentTable() {
                   <Checkbox
                     checked={selectedAppointment.paid}
                     onChange={(e) => {
+                      if (selectedAppointment?.status === "cancelled") return;
+                      
                       const isPaid = e.target.checked;
                       // Log the current values for debugging
                       console.log("Current payment values:", {
@@ -993,6 +1012,7 @@ export default function MobileAppointmentTable() {
                     }}
                     size="small"
                     name="payment-checkbox-mobile"
+                    disabled={selectedAppointment?.status === "cancelled"}
                   />
                 }
                 label={
@@ -1001,6 +1021,7 @@ export default function MobileAppointmentTable() {
                     sx={{ 
                       fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
                       color: validationErrors.payment ? 'error.main' : 
+                        selectedAppointment?.status === "cancelled" ? 'text.secondary' :
                         selectedAppointment.paid ? 'primary.main' : 'text.primary',
                       fontSize: '0.85rem'
                     }}
@@ -1017,6 +1038,8 @@ export default function MobileAppointmentTable() {
                   <Checkbox
                     checked={selectedAppointment.checkin}
                     onChange={(e) => {
+                      if (selectedAppointment?.status === "cancelled") return;
+                      
                       const newCheckinState = e.target.checked;
                       
                       // Check both payment and mobile conditions
@@ -1047,7 +1070,7 @@ export default function MobileAppointmentTable() {
                         checkin: newCheckinState,
                       }))
                     }}
-                    disabled={originalCheckinState}
+                    disabled={originalCheckinState || selectedAppointment?.status === "cancelled"}
                     size="small"
                   />
                 }
@@ -1086,6 +1109,10 @@ export default function MobileAppointmentTable() {
                     }
                     label="Payment Mode"
                     sx={{ fontSize: '0.85rem' }}
+                    inputProps={{
+                      readOnly: selectedAppointment?.status === "cancelled"
+                    }}
+                    disabled={selectedAppointment?.status === "cancelled"}
                   >
                     <MenuItem value="cash" sx={{ fontSize: '0.85rem' }}>Cash</MenuItem>
                     <MenuItem value="online" sx={{ fontSize: '0.85rem' }}>Online</MenuItem>
@@ -1103,9 +1130,26 @@ export default function MobileAppointmentTable() {
                       fees_paid: value === "" ? 0 : Number(value),
                     }));
                   }}
-                  InputProps={{ style: { fontSize: '0.85rem' } }}
+                  InputProps={{ 
+                    style: { fontSize: '0.85rem' },
+                    readOnly: selectedAppointment?.status === "cancelled"
+                  }}
                   InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                   size="small"
+                  helperText={selectedAppointment?.status === "cancelled" ? "Editable field" : ""}
+                  disabled={false}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: selectedAppointment?.status === "cancelled" ? 'rgba(25, 118, 210, 0.05)' : 'transparent',
+                      '& fieldset': {
+                        borderColor: selectedAppointment?.status === "cancelled" ? 'primary.main' : 'inherit',
+                        borderWidth: selectedAppointment?.status === "cancelled" ? 2 : 1
+                      },
+                      '&:hover fieldset': {
+                        borderColor: selectedAppointment?.status === "cancelled" ? 'primary.dark' : 'inherit',
+                      }
+                    }
+                  }}
                 />
               </Box>
             )}
@@ -1121,29 +1165,38 @@ export default function MobileAppointmentTable() {
                 label="Age"
                 type="number"
                 value={selectedAppointment.age || ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   setSelectedAppointment((prev) => ({
                     ...prev,
                     age: e.target.value,
                   }))
-                }
-                InputProps={{ style: { fontSize: '0.85rem' } }}
+                }}
+                InputProps={{ 
+                  style: { fontSize: '0.85rem' },
+                  readOnly: selectedAppointment?.status === "cancelled" 
+                }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
+                disabled={selectedAppointment?.status === "cancelled"}
               />
               <FormControl component="fieldset">
                 <ToggleButtonGroup
                   value={selectedAppointment.sex || ""}
                   exclusive
-                  onChange={(_, newValue) =>
+                  onChange={(_, newValue) => {
+                    if (selectedAppointment?.status === "cancelled") return;
+                    
                     setSelectedAppointment((prev) => ({
                       ...prev,
                       sex: newValue || "",
                     }))
-                  }
+                  }}
                   color="primary"
                   size="small"
                   sx={{ height: '36px' }}
+                  disabled={selectedAppointment?.status === "cancelled"}
                 >
                   <ToggleButton value="M" color="primary" sx={{ fontSize: '0.75rem', py: 0 }}>
                     Male
@@ -1168,29 +1221,41 @@ export default function MobileAppointmentTable() {
                 fullWidth
                 label="Guardian"
                 value={selectedAppointment.guardian || ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   setSelectedAppointment((prev) => ({
                     ...prev,
                     guardian: e.target.value,
                   }))
-                }
-                InputProps={{ style: { fontSize: '0.85rem' } }}
+                }}
+                InputProps={{ 
+                  style: { fontSize: '0.85rem' },
+                  readOnly: selectedAppointment?.status === "cancelled"
+                }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
+                disabled={selectedAppointment?.status === "cancelled"}
               />
               <TextField
                 fullWidth
                 label="Place"
                 value={selectedAppointment.location || ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   setSelectedAppointment((prev) => ({
                     ...prev,
                     location: e.target.value,
                   }))
-                }
-                InputProps={{ style: { fontSize: '0.85rem' } }}
+                }}
+                InputProps={{ 
+                  style: { fontSize: '0.85rem' },
+                  readOnly: selectedAppointment?.status === "cancelled"
+                }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
+                disabled={selectedAppointment?.status === "cancelled"}
               />
             </Box>
 
@@ -1204,14 +1269,20 @@ export default function MobileAppointmentTable() {
                 <InputLabel sx={{ fontSize: '0.85rem' }}>Appointment Type</InputLabel>
                 <Select
                   value={selectedAppointment.appointment_type || "New"}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    if (selectedAppointment?.status === "cancelled") return;
+                    
                     setSelectedAppointment((prev) => ({
                       ...prev,
                       appointment_type: e.target.value,
                     }))
-                  }
+                  }}
                   label="Appointment Type"
                   sx={{ fontSize: '0.85rem' }}
+                  inputProps={{
+                    readOnly: selectedAppointment?.status === "cancelled"
+                  }}
+                  disabled={selectedAppointment?.status === "cancelled"}
                 >
                   <MenuItem value="New" sx={{ fontSize: '0.85rem' }}>New</MenuItem>
                   <MenuItem value="Follow-up" sx={{ fontSize: '0.85rem' }}>Follow-up</MenuItem>
@@ -1224,31 +1295,28 @@ export default function MobileAppointmentTable() {
                 fullWidth
                 label="Complaint"
                 value={selectedAppointment.disease || ""}
-                onChange={(e) =>
+                onChange={(e) => {
+                  if (selectedAppointment?.status === "cancelled") return;
+                  
                   setSelectedAppointment((prev) => ({
                     ...prev,
                     disease: e.target.value,
                   }))
-                }
-                InputProps={{ style: { fontSize: '0.85rem' } }}
+                }}
+                InputProps={{ 
+                  style: { fontSize: '0.85rem' },
+                  readOnly: selectedAppointment?.status === "cancelled"
+                }}
                 InputLabelProps={{ style: { fontSize: '0.85rem' } }}
                 size="small"
+                disabled={selectedAppointment?.status === "cancelled"}
               />
             </Box>
           </Box>
         )}
       </DialogContent>
       <DialogActions sx={{ overflow: 'initial' }}>
-        <Box 
-          sx={{ 
-            display: "flex", 
-            width: "100%", 
-            px: 1, 
-            py: 1,
-            justifyContent: "space-between",
-            overflow: 'initial'
-          }}
-        >
+        {selectedAppointment?.status !== "cancelled" && (
           <Button 
             onClick={() => {
               setRowToCancel(selectedAppointment);
@@ -1262,28 +1330,32 @@ export default function MobileAppointmentTable() {
           >
             {isCanceling ? <CircularProgress size={12} /> : "Delete"}
           </Button>
-          
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <Button 
-              onClick={handleEditModalClose}
-              variant="outlined"
-              color="primary"
-              size="small"
-              sx={{ height: "28px", fontSize: "0.75rem" }}
-            >
-              Close
-            </Button>
-            <Button 
-              onClick={handleEditSubmit}
-              variant="contained"
-              color="primary"
-              size="small"
-              sx={{ height: "28px", fontSize: "0.75rem" }}
-              disabled={isUpdating || !hasAppointmentChanged()}
-            >
-              {isUpdating ? <CircularProgress size={12} /> : "Update"}
-            </Button>
-          </Box>
+        )}
+        
+        <Box sx={{ 
+          display: "flex", 
+          gap: 1,
+          ml: selectedAppointment?.status === "cancelled" ? "auto" : 0
+        }}>
+          <Button 
+            onClick={handleEditModalClose}
+            variant="outlined"
+            color="primary"
+            size="small"
+            sx={{ height: "28px", fontSize: "0.75rem" }}
+          >
+            Close
+          </Button>
+          <Button 
+            onClick={handleEditSubmit}
+            variant="contained"
+            color="primary"
+            size="small"
+            sx={{ height: "28px", fontSize: "0.75rem" }}
+            disabled={isUpdating || !hasAppointmentChanged()}
+          >
+            {isUpdating ? <CircularProgress size={12} /> : "Update"}
+          </Button>
         </Box>
       </DialogActions>
     </Dialog>

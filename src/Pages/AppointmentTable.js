@@ -1026,7 +1026,9 @@ export default function AppointmentTable() {
       }}
     >
       <DialogTitle sx={{ position: "relative", pr: 6, p: 0, mb: 2 }}>
-        <Typography component="div" variant="h5">Edit Appointment</Typography>
+        <Typography component="div" variant="h5">
+          {selectedAppointment?.status === "cancelled" ? "View Cancelled Appointment" : "Edit Appointment"}
+        </Typography>
         <IconButton
           aria-label="close"
           onClick={handleEditModalClose}
@@ -1054,7 +1056,7 @@ export default function AppointmentTable() {
               fullWidth
               label="Token Number"
               type="number"
-              disabled = {true}
+              disabled={true}
               value={selectedAppointment.token}
               InputProps={{ readOnly: true }}
             />
@@ -1067,6 +1069,8 @@ export default function AppointmentTable() {
               loading={isEditSearching}
               value={selectedAppointment.phone_number || ""}
               onChange={(_, newValue) => {
+                if (selectedAppointment?.status === "cancelled") return;
+                
                 if (typeof newValue === 'object') {
                   handleEditPatientSelect(newValue);
                   // Clear mobile number validation error when a patient is selected
@@ -1100,11 +1104,14 @@ export default function AppointmentTable() {
                 }
               }}
               freeSolo={true}
+              disabled={selectedAppointment?.status === "cancelled"}
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Mobile"
                   onChange={(e) => {
+                    if (selectedAppointment?.status === "cancelled") return;
+                    
                     const value = e.target.value;
                     setSelectedAppointment(prev => ({
                       ...prev,
@@ -1133,6 +1140,8 @@ export default function AppointmentTable() {
                     }
                   }}
                   onBlur={() => {
+                    if (selectedAppointment?.status === "cancelled") return;
+                    
                     // Mark field as touched when user leaves the field
                     setMobileFieldTouched(true);
                     
@@ -1160,7 +1169,8 @@ export default function AppointmentTable() {
                   inputProps={{
                     ...params.inputProps,
                     maxLength: 10,
-                    value: selectedAppointment.phone_number || ""
+                    value: selectedAppointment.phone_number || "",
+                    readOnly: selectedAppointment?.status === "cancelled"
                   }}
                   InputProps={{
                     ...params.InputProps,
@@ -1170,6 +1180,7 @@ export default function AppointmentTable() {
                         {params.InputProps.endAdornment}
                       </>
                     ),
+                    readOnly: selectedAppointment?.status === "cancelled"
                   }}
                   error={validationErrors.mobileNumber}
                   FormHelperTextProps={{
@@ -1210,6 +1221,7 @@ export default function AppointmentTable() {
                   firstName: e.target.value,
                 }))
               }
+              InputProps={{ readOnly: selectedAppointment?.status === "cancelled" }}
             />
             <TextField
               fullWidth
@@ -1221,12 +1233,15 @@ export default function AppointmentTable() {
                   lastName: e.target.value,
                 }))
               }
+              InputProps={{ readOnly: selectedAppointment?.status === "cancelled" }}
             />
             <FormControlLabel
               control={
                 <Checkbox
                   checked={selectedAppointment.paid}
                   onChange={(e) => {
+                    if (selectedAppointment?.status === "cancelled") return;
+                    
                     setSelectedAppointment((prev) => ({
                       ...prev,
                       paid: e.target.checked,
@@ -1240,6 +1255,7 @@ export default function AppointmentTable() {
                     }
                   }}
                   name="payment-checkbox"
+                  disabled={selectedAppointment?.status === "cancelled"}
                 />
               }
               label={
@@ -1248,6 +1264,7 @@ export default function AppointmentTable() {
                   sx={{ 
                     fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
                     color: validationErrors.payment ? 'error.main' : 
+                      selectedAppointment?.status === "cancelled" ? 'text.secondary' :
                       selectedAppointment.paid ? 'primary.main' : 'text.primary'
                   }}
                 >
@@ -1260,6 +1277,8 @@ export default function AppointmentTable() {
                 <Checkbox
                   checked={selectedAppointment.checkin}
                   onChange={(e) => {
+                    if (selectedAppointment?.status === "cancelled") return;
+                    
                     const newCheckinState = e.target.checked;
                     
                     // Check both payment and mobile conditions
@@ -1295,7 +1314,7 @@ export default function AppointmentTable() {
                       checkin: newCheckinState,
                     }))
                   }}
-                  disabled={originalCheckinState}
+                  disabled={originalCheckinState || selectedAppointment?.status === "cancelled"}
                 />
               }
               label={
@@ -1303,7 +1322,8 @@ export default function AppointmentTable() {
                   variant="body1" 
                   sx={{ 
                     fontWeight: selectedAppointment.checkin ? 'bold' : 'normal',
-                    color: selectedAppointment.checkin ? 'primary.main' : 'text.primary'
+                    color: selectedAppointment?.status === "cancelled" ? 'text.secondary' :
+                      selectedAppointment.checkin ? 'primary.main' : 'text.primary'
                   }}
                 >
                   Present in Clinic
@@ -1323,6 +1343,9 @@ export default function AppointmentTable() {
                       }))
                     }
                     label="Payment Mode"
+                    inputProps={{
+                      readOnly: selectedAppointment?.status === "cancelled"
+                    }}
                   >
                     <MenuItem value="cash">Cash</MenuItem>
                     <MenuItem value="online">Online</MenuItem>
@@ -1339,6 +1362,19 @@ export default function AppointmentTable() {
                       fees_paid: Number(e.target.value),
                     }))
                   }
+                  helperText={selectedAppointment?.status === "cancelled" ? "Editable field" : ""}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      backgroundColor: selectedAppointment?.status === "cancelled" ? 'rgba(25, 118, 210, 0.05)' : 'transparent',
+                      '& fieldset': {
+                        borderColor: selectedAppointment?.status === "cancelled" ? 'primary.main' : 'inherit',
+                        borderWidth: selectedAppointment?.status === "cancelled" ? 2 : 1
+                      },
+                      '&:hover fieldset': {
+                        borderColor: selectedAppointment?.status === "cancelled" ? 'primary.dark' : 'inherit',
+                      }
+                    }
+                  }}
                 />
               </>
             )}
@@ -1353,6 +1389,7 @@ export default function AppointmentTable() {
                   age: e.target.value,
                 }))
               }
+              InputProps={{ readOnly: selectedAppointment?.status === "cancelled" }}
             />
             <FormControl component="fieldset">
               <ToggleButtonGroup
@@ -1365,6 +1402,7 @@ export default function AppointmentTable() {
                   }))
                 }
                 color="primary"
+                disabled={selectedAppointment?.status === "cancelled"}
               >
                 <ToggleButton value="M" color="primary">
                   Male
@@ -1385,6 +1423,7 @@ export default function AppointmentTable() {
                   guardian: e.target.value,
                 }))
               }
+              InputProps={{ readOnly: selectedAppointment?.status === "cancelled" }}
             />
             <TextField
               fullWidth
@@ -1396,6 +1435,7 @@ export default function AppointmentTable() {
                   location: e.target.value,
                 }))
               }
+              InputProps={{ readOnly: selectedAppointment?.status === "cancelled" }}
             />
             <FormControl fullWidth>
               <InputLabel>Appointment Type</InputLabel>
@@ -1408,6 +1448,9 @@ export default function AppointmentTable() {
                   }))
                 }
                 label="Appointment Type"
+                inputProps={{
+                  readOnly: selectedAppointment?.status === "cancelled"
+                }}
               >
                 <MenuItem value="New">New</MenuItem>
                 <MenuItem value="Follow-up">Follow-up</MenuItem>
@@ -1426,29 +1469,32 @@ export default function AppointmentTable() {
                   disease: e.target.value,
                 }))
               }
+              InputProps={{ readOnly: selectedAppointment?.status === "cancelled" }}
             />
           </div>
         )}
       </DialogContent>
       <Box sx={{ mt: 3, display: "flex", justifyContent: "flex-end" }}>
-        <Button
-          onClick={() => {
-            setRowToCancel(selectedAppointment);
-            setCancelConfirmationOpen(true);
-          }}
-          color="error"
-          variant="outlined"
-          sx={{ 
-            mr: 2,
-            borderWidth: "2px",
-            '&:hover': {
-              borderWidth: "2px"
-            }
-          }}
-          disabled={isCanceling}
-        >
-          {isCanceling ? <CircularProgress size={24} /> : "Cancel Appointment"}
-        </Button>
+        {selectedAppointment?.status !== "cancelled" && (
+          <Button
+            onClick={() => {
+              setRowToCancel(selectedAppointment);
+              setCancelConfirmationOpen(true);
+            }}
+            color="error"
+            variant="outlined"
+            sx={{ 
+              mr: 2,
+              borderWidth: "2px",
+              '&:hover': {
+                borderWidth: "2px"
+              }
+            }}
+            disabled={isCanceling}
+          >
+            {isCanceling ? <CircularProgress size={24} /> : "Cancel Appointment"}
+          </Button>
+        )}
         <Button
           variant="contained"
           onClick={handleConfirmEdit}
