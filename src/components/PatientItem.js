@@ -282,7 +282,6 @@ const PatientItem = ({
                   <div className="patient-header">
                     <Typography variant="h6" component="h3">
                       {appointment.name || "Unknown Patient"}
-                      (position: {position})
                     </Typography>
 
                     <div className="status-tags">
@@ -466,7 +465,6 @@ const PatientItem = ({
                 <div className="patient-header">
                   <Typography variant="h6" component="h3">
                     {appointment.name || "Unknown Patient"}
-                    (position: {position})
                   </Typography>
 
                   <div className="status-tags">
