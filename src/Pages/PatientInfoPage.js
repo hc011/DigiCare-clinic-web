@@ -82,6 +82,7 @@ import { PageHeader } from '../components/common/PageHeader';
 import { getPatientDetails, getPrescriptions, getPastPrescriptions, getAppointmentDetails, manageVitals, getAttachments, uploadAttachment, deleteAttachment, getVitals, getCurrentPrescription } from '../services/api';
 import { useAppointmentForm } from '../context/AppointmentFormContext';
 import { printPrescription } from '../utils/prescriptionUtils';
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -113,6 +114,7 @@ const PatientInfoPage = () => {
   const { openAppointmentForm } = useAppointmentForm();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const { getCurrentCabinId } = useCheckupCabin();
   
   // Consolidated state declarations
   const [loading, setLoading] = useState(true);
@@ -167,8 +169,6 @@ const PatientInfoPage = () => {
   const [complaints, setComplaints] = useState(location.state?.complaintsData || []);
   const [prescriptionLoadingMap, setPrescriptionLoadingMap] = useState({});
 
-  const user = JSON.parse(localStorage.getItem("user"));
-  const cabinId = user?.checkupcabindata?.[0]?.id;
 
   const appointmentInfo = location.state?.appointmentInfo;
   const patientInfo = location.state?.patientInfo || {};
@@ -711,7 +711,7 @@ const PatientInfoPage = () => {
       mode: appointment.mode,
       date: appointment.date || new Date(appointment.slot).toLocaleDateString(),
       time: appointment.time || new Date(appointment.slot).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      doctor: appointment.doctor || user.checkupcabindata?.[0]?.doctor || '',
+      doctor: appointment.doctor || '',
       department: appointment.department || "",
     });
     setAppointmentDetailsOpen(true);
@@ -894,7 +894,7 @@ const PatientInfoPage = () => {
             <tbody>
               <tr>
                 <td>${selectedAppointment.appointment_type || 'Consultation'} - ${selectedAppointment.disease || 'General Checkup'}</td>
-                <td>${selectedAppointment.doctor || user.checkupcabindata?.[0]?.doctor || 'Dr. John Doe'}</td>
+                <td>${selectedAppointment.doctor || ''}</td>
                 <td>${selectedAppointment.department || 'General Medicine'}</td>
                 <td>₹${selectedAppointment.fees_paid}</td>
               </tr>
