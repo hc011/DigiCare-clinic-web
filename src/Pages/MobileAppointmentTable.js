@@ -46,6 +46,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import { getCabinInfo } from "../utils/dateUtils";
 import webSocketService from "../services/websocketService";
 import { useNotification } from "../context/NotificationContext";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -110,13 +111,16 @@ function generateDisplayRows(actualRows, isSearchActive) {
 }
 
 export default function MobileAppointmentTable() {
-  const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfo(user);
+  // Get cabin data from context
+  const { getCurrentCabinId, getCurrentDoctor, selectedSlot } = useCheckupCabin();
+  const cabinId = getCurrentCabinId();
   
   // State for appointment data
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Add state to track previous selectedSlot
+  const [prevSlot, setPrevSlot] = useState(null);
   
   // Notification context for showing messages
   const { showErrorSnackbar, showSuccessSnackbar, showWarningSnackbar } = useNotification();
@@ -162,14 +166,11 @@ export default function MobileAppointmentTable() {
   
   // Memoized cabin info for appointments
   const cabinInfo = useMemo(() => {
-    if (user && user.checkupcabindata && user.checkupcabindata.length > 0) {
-      return {
-        cabinNumber: user.checkupcabindata[0].cab_id,
-        doctorName: user.checkupcabindata[0].doctor_name || "Dr.",
-      };
-    }
-    return { cabinNumber: "", doctorName: "Dr." };
-  }, [user]);
+    return {
+      cabinNumber: getCurrentCabinId(), // Using ID as cabin number
+      doctorName: getCurrentDoctor()
+    };
+  }, [getCurrentCabinId, getCurrentDoctor]);
 
   // Calculate summary statistics from appointments
   const summaryStats = useMemo(() => {
@@ -498,18 +499,37 @@ export default function MobileAppointmentTable() {
     }
   };
 
-  // Initial fetch on component mount
+  // Log when selectedSlot changes (for debugging)
   useEffect(() => {
-    if (cabinId && selectedSlot) {
-      fetchAppointmentsData();
+    console.log("MobileAppointmentTable - selectedSlot in context changed to:", selectedSlot);
+  }, [selectedSlot]);
+
+  // Initial fetch on component mount and when selectedSlot changes
+  useEffect(() => {
+    // Check if we have the required values
+    if (!cabinId || !selectedSlot) {
+      console.log("Missing cabinId or selectedSlot, cannot fetch appointments");
+      return;
     }
-  }, [cabinId, selectedSlot]);
+    
+    console.log("Cabin ID or selected slot changed - fetching appointments", {
+      cabinId,
+      selectedSlot,
+      prevSlot
+    });
+    
+    // Always fetch when cabin ID or selectedSlot changes
+    fetchAppointmentsData();
+    
+    // Update the previous slot after fetching
+    setPrevSlot(selectedSlot);
+  }, [cabinId, selectedSlot]); // Only depend on cabinId and selectedSlot, not prevSlot
 
   // Setup WebSocket subscription for real-time updates
   useEffect(() => {
     if (!cabinId || !selectedSlot) return;
 
-    console.log("Setting up WebSocket subscription for appointments in Mobile view");
+    console.log("Setting up WebSocket subscription for appointments in Mobile view for slot:", selectedSlot);
     
     // Subscribe to appointment updates
     const unsubscribe = webSocketService.subscribe('appointment', (response) => {
@@ -1107,7 +1127,7 @@ export default function MobileAppointmentTable() {
                         mode: e.target.value,
                       }))
                     }
-                    label="Payment Mode"
+                    label="Mode"
                     sx={{ fontSize: '0.85rem' }}
                     inputProps={{
                       readOnly: selectedAppointment?.status === "cancelled"
