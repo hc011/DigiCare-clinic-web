@@ -799,7 +799,7 @@ const ManageSlot = () => {
                 sx={{ my: 0.5 }}
               />
               
-              <FormControlLabel
+              {/* <FormControlLabel
                 control={
                   <Switch
                     checked={autoAdjust}
@@ -816,7 +816,7 @@ const ManageSlot = () => {
                   </Box>
                 }
                 sx={{ my: 0.5 }}
-              />
+              /> */}
             </Paper>
           </Grid>
 
