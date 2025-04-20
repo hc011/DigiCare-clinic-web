@@ -40,6 +40,7 @@ import {
 
 import { useNavigate, useLocation } from "react-router-dom";
 import { getCabinInfo } from "../utils/dateUtils";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 
 // Key for storing state in sessionStorage
 const PAST_APPOINTMENTS_STATE_KEY = 'pastAppointmentsState';
@@ -75,9 +76,10 @@ const CustomNoRowsOverlay = () => (
 );
 
 export default function PastAppointments() {
-  const user = JSON.parse(localStorage.getItem("user"));
-  const cabinId = user?.checkupcabindata?.[0]?.id;
-  const cabinSlots = user?.checkupcabindata?.[0]?.cabin_slots || [];
+  const { getCurrentCabinId, getCurrentCabinSlots } = useCheckupCabin();
+  
+  const cabinId = getCurrentCabinId();
+  const cabinSlots = getCurrentCabinSlots();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -254,11 +256,7 @@ export default function PastAppointments() {
   // First useEffect - Only find matching slots when the date changes
   useEffect(() => {
     // Fetch past appointments data
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (!user) return;
-
-    const { cabinId, selectedSlot, cabinSlots: allCabinSlots } = getCabinInfo(user);
-    if (!cabinId) return;
+    const allCabinSlots = getCurrentCabinSlots();
     
     console.log("Available cabin slots:", allCabinSlots);
     
@@ -349,8 +347,8 @@ export default function PastAppointments() {
     }));
     
     // Find if this is an inactive slot
-    const cabinSlots = user?.checkupcabindata?.[0]?.cabin_slots || [];
-    const slotObj = cabinSlots.find(s => (typeof s === 'string' ? s : s.slot) === slot);
+    const allCabinSlots = getCurrentCabinSlots();
+    const slotObj = allCabinSlots.find(s => (typeof s === 'string' ? s : s.slot) === slot);
     const isActive = typeof slotObj === 'string' ? true : (slotObj?.is_active ?? true);
     
     getAppointments(slot); // Fetch appointments for the selected slot
@@ -965,6 +963,8 @@ export default function PastAppointments() {
   // Helper function to create a Date object with only the date part in UTC
   function getUTCDateOnly() {
     const now = new Date();
+    // Subtract one day to get yesterday's date
+    now.setDate(now.getDate() - 1);
     return new Date(Date.UTC(
       now.getFullYear(),
       now.getMonth(),
@@ -1079,8 +1079,8 @@ export default function PastAppointments() {
                 });
                 
                 // Find the corresponding slot object to check its is_active status
-                const cabinSlots = user?.checkupcabindata?.[0]?.cabin_slots || [];
-                const slotObj = cabinSlots.find(s => (typeof s === 'string' ? s : s.slot) === slot);
+                const allCabinSlots = getCurrentCabinSlots();
+                const slotObj = allCabinSlots.find(s => (typeof s === 'string' ? s : s.slot) === slot);
                 const isActive = typeof slotObj === 'string' ? true : (slotObj?.is_active ?? true);
                 
                 return (
