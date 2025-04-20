@@ -23,9 +23,14 @@ import { getCabinInfo } from "../utils/dateUtils";
 import "./AddAppointmentMobile.css";
 import { useNotification } from "../context/NotificationContext";
 import CloseIcon from '@mui/icons-material/Close';
+import { useCheckupCabin } from '../context/CheckupCabinContext';
+import { fetchCabinSlots } from "../services/api";
+import { timeConverter24to12 } from '../utils/dateUtils';
 
 export default function AddAppointmentMobile({ patients }) {
   const user = JSON.parse(localStorage.getItem("user"));
+  const { cabinId, selectedSlot } = getCabinInfo(user);
+
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +45,12 @@ export default function AddAppointmentMobile({ patients }) {
     mobileNumber: false,
     payment: false
   });
+
+  const { getLatestOpenCabin } = useCheckupCabin();
+  const [localCabinId, setLocalCabinId] = useState(cabinId || null);
+  const [localSelectedSlot, setLocalSelectedSlot] = useState(selectedSlot || null);
+  const [localOpenSlots, setLocalOpenSlots] = useState([]);
+  const cabins = user?.checkupcabindata || [];
 
   const [formData, setFormData] = useState({
     token: "",
@@ -59,17 +70,99 @@ export default function AddAppointmentMobile({ patients }) {
     fees_paid: 0,
   });
 
-  const { cabinId, selectedSlot } = getCabinInfo(user);
+  useEffect(() => {
+    if(cabinId !== localCabinId) {
+      setLocalCabinId(cabinId);
+    }
+    if(selectedSlot !== localSelectedSlot) {
+      setLocalSelectedSlot(selectedSlot);
+    }
+  }, [cabinId, selectedSlot]);
+  
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const slots = await fetchCabinSlots(localCabinId);
+        const openSlots = slots.filter(slot => slot.status === "open");
+        const latestOpenSlot = getLatestOpenCabin(openSlots).slot;
+        setLocalSelectedSlot(latestOpenSlot);
+        setLocalOpenSlots(openSlots);
+      } catch (error) {
+        console.error("Error fetching slots:", error);
+      }
+    };
+  
+    if (localCabinId) {
+      fetchSlots();
+    }
+  }, [localCabinId]);
+
+  useEffect(() => {
+      const fetchMaxToken = async () => {
+        try {
+          const maxToken = await getMaxTokenNumber(localCabinId, localSelectedSlot);          
+          const nextToken = maxToken + 1;
+      
+          setSuggestedToken(nextToken);
+          setFormData((prev) => ({ ...prev, token: nextToken }));
+          
+        } catch (error) {
+          console.error("Error getting max token:", error);
+          setError("Failed to initialize form. Please try again.");
+        }
+      };
+  
+      // Check if selectedSlot changed
+      if (localCabinId && localSelectedSlot) {
+        console.log(localSelectedSlot)
+        fetchMaxToken();
+      }
+  
+    }, [localSelectedSlot]);  
+
+  // Format the slot date for display using the date field when available
+  const formatSlotDateFromAPI = (slotObj) => {
+    if (!slotObj) return 'No slot selected';
+    
+    // Use date field if available, otherwise fall back to slot timestamp
+    const dateToUse = slotObj.date || slotObj.slot.split('T')[0];
+    
+    try {
+      const date = new Date(dateToUse);
+      const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+      const day = date.getDate();
+      const month = date.toLocaleString('en-US', { month: 'long' });
+      const year = date.getFullYear();
+      
+      return `${weekday}, ${day} ${month}, ${year}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
+
+  const formatSlotDateTime = (slotDateTime) => {
+    if (!slotDateTime) return 'No slot selected';
+    
+    const date = new Date(slotDateTime);
+    
+    const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'long' });
+    const year = date.getFullYear();
+    
+    return `${weekday}, ${day} ${month}, ${year}`;
+  };
 
   const fetchSuggestedToken = async () => {
-    if (!cabinId || !selectedSlot) {
+    if (!localCabinId || !localSelectedSlot) {
       console.error("Cannot fetch token: missing cabinId or selectedSlot");
       return;
     }
     
     try {
       setLoading(true);
-      const maxToken = await getMaxTokenNumber(cabinId, selectedSlot);
+      const maxToken = await getMaxTokenNumber(localCabinId, localSelectedSlot);
       const nextToken = maxToken + 1;
       console.log("Fetched maximum token from API:", maxToken, "Next token:", nextToken);
       setSuggestedToken(nextToken);
@@ -97,7 +190,7 @@ export default function AddAppointmentMobile({ patients }) {
     // Reset validation errors when component mounts
     setValidationErrors({ mobileNumber: false, payment: false });
     setMobileFieldTouched(false);
-  }, [cabinId, selectedSlot]);
+  }, [localCabinId, localSelectedSlot]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -255,15 +348,15 @@ export default function AddAppointmentMobile({ patients }) {
     }
 
     try {
-      if (!cabinId || !selectedSlot) {
+      if (!localCabinId || !localSelectedSlot) {
         setError("Unable to retrieve cabin information");
         setLoading(false);
         return;
       }
 
       const payload = {
-        cabinId: cabinId,
-        slot: selectedSlot,
+        cabinId: localCabinId,
+        slot: localSelectedSlot,
         name: `${formData.firstName} ${formData.lastName}`.trim().toUpperCase(),
         token: parseInt(formData.token),
         paid: formData.paid,
@@ -385,6 +478,47 @@ export default function AddAppointmentMobile({ patients }) {
           </Typography>
         )}
         {/* Token Input */}
+
+        {/* Add this after your token TextField */}
+        <FormControl fullWidth sx={{ mb: 1 }}>
+          <InputLabel>Select Cabin</InputLabel>
+          <Select
+            name="cabin"
+            value={localCabinId}
+            onChange={(e) => setLocalCabinId(Number(e.target.value))}
+            label="Select Cabin"
+          >
+            {cabins.map((cabin) => (
+              <MenuItem key={cabin.id} value={cabin.id}>
+                {cabin.doctor}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <FormControl fullWidth sx={{ mb: 1 }}>
+          <InputLabel>Select Slot</InputLabel>
+          <Select
+            name="slot"
+            value={localSelectedSlot}
+            onChange={(e) => setLocalSelectedSlot(e.target.value)}
+            label="Select Slot"
+          >
+            {localOpenSlots.map((slot) => (
+              <MenuItem key={slot.slot} value={slot.slot}>
+                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                  <Typography variant="body1">
+                    {timeConverter24to12(slot.start_time)} - {timeConverter24to12(slot.end_time)} ({formatSlotDateFromAPI(slot)})
+                  </Typography>
+                  {/* <Typography variant="caption" color="text.secondary">
+                    {formatSlotDateTime(slot.slot)}
+                  </Typography> */}
+                </Box>
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
         <TextField
           fullWidth
           label="Token Number"
