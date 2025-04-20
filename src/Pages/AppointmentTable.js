@@ -37,15 +37,15 @@ import {
   updateAppointmentDetails,
   removeAppointment,
   getPatientProfile,
-  createSlot,
   fetchAppointments,
-  fetchExpiredTokens
 } from "../services/api";
 import { useNotification } from "../context/NotificationContext";
 import { getCabinInfo } from '../utils/dateUtils';
 import { useNavigate, useLocation } from "react-router-dom";
 import webSocketService from "../services/websocketService";
 import { useAppointmentForm } from "../context/AppointmentFormContext";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
+import axios from "axios";
 
 const modalStyle = {
   position: "absolute",
@@ -73,15 +73,16 @@ const CustomNoRowsOverlay = () => (
   </div>
 );
 
-function generateDisplayRows(actualRows) {
+function generateDisplayRows(actualRows, cabinId) {
   if (actualRows.length === 0) return [];
 
   const tokens = actualRows.map((row) => parseInt(row.token) || 0);
+  
+  // Handle empty tokens array
+  if (tokens.length === 0) return [];
+  
   const minToken = Math.min(...tokens);
   const maxToken = Math.max(...tokens);
-
-  // Create a Set of all actual tokens to track which ones exist
-  const existingTokens = new Set(tokens);
   
   // Generate all tokens from minToken to maxToken (filling gaps)
   const allTokens = Array.from(
@@ -95,16 +96,18 @@ function generateDisplayRows(actualRows) {
     // If token exists in actual rows, use that data
     const existing = tokenMap.get(token);
     if (existing) {
-      // Make sure it has an ID that works with getRowId
       return {
         ...existing,
-        id: existing.appointment_id || `token-${token}`
+        // Always use the same ID format as our main row data
+        id: existing.appointment_id 
+        ? `${cabinId}-${existing.appointment_id}`
+        : `${cabinId}-token-${token}`      
       };
     }
     
     // Otherwise return a placeholder object with stable ID
     return {
-      id: `placeholder-${token}`,
+      id: `${cabinId}-placeholder-${token}`,
       token: token,
       appointment_id: "",
       firstName: "",
@@ -124,8 +127,6 @@ function generateDisplayRows(actualRows) {
   });
 }
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
-
 // Update the custom toolbar component before the AppointmentTable component
 function CustomToolbar(props) {
   return (
@@ -144,7 +145,7 @@ function CustomToolbar(props) {
 
 export default function AppointmentTable() {
   const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfo(user);
+  const {cabinId, selectedSlot } = useCheckupCabin();
   const [currentCabinSlot, setCurrentCabinSlot] = useState(null);
 
   const [appointments, setAppointments] = useState([]);
@@ -220,13 +221,6 @@ export default function AppointmentTable() {
     [appointments]
   );
 
-  const genderOptions = [
-    { value: "M", label: "Male" },
-    { value: "F", label: "Female" },
-    { value: "O", label: "Other" },
-  ];
-
-  const [suggestedToken, setSuggestedToken] = React.useState();
   const [editConfirmationOpen, setEditConfirmationOpen] = React.useState(false);
   const [pendingRow, setPendingRow] = React.useState(null);
   const [originalRow, setOriginalRow] = React.useState(null);
@@ -260,62 +254,66 @@ export default function AppointmentTable() {
   
   const navigate = useNavigate();
   
-  const [endSlotModalOpen, setEndSlotModalOpen] = useState(false);
-  const [newSlotData, setNewSlotData] = useState({
-    datetime: ''
-  });
-  const [isCreatingSlot, setIsCreatingSlot] = useState(false);
-  
   const [validationErrors, setValidationErrors] = useState({
     payment: false,
     mobileNumber: false
   });
   
   const [mobileFieldTouched, setMobileFieldTouched] = useState(false);
-  
+    
   const getAppointments = async () => {
     if (!cabinId || !selectedSlot) return;
     
     console.log(`Fetching appointments for cabin ${cabinId} and slot ${selectedSlot}`);
+    setAppointments([]);
+    setRows([]);
     setLoading(true);
     
+    
     try {
+      
+      // Wait for React to process state updates
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
       const fetchedAppointments = await fetchAppointments(cabinId, selectedSlot);
       console.log(`Fetched ${fetchedAppointments.length} appointments`);
-      const formattedAppointments = fetchedAppointments.map(apt => {
-        // Parse token as integer and ensure stable IDs
-        const tokenNumber = parseInt(apt.token, 10) || 0;
+      
+      if (fetchedAppointments && fetchedAppointments.length > 0) {
+        const formattedAppointments = fetchedAppointments.map(apt => {
+          // Parse token as integer and ensure stable IDs
+          const tokenNumber = parseInt(apt.token, 10) || 0;
+          
+          return {
+            ...apt,
+            // Use appointment_id if available, otherwise use token string with a stable prefix
+            id: apt.appointment_id || `token-${tokenNumber}`,
+            token: tokenNumber
+          };
+        });
         
-        return {
-          ...apt,
-          // Use appointment_id if available, otherwise use token string with a stable prefix
-          id: apt.appointment_id || `token-${tokenNumber}`,
-          token: tokenNumber
-        };
-      });
-      setAppointments(formattedAppointments);
+        setAppointments(formattedAppointments);
+      } else {
+        // Ensure states are empty when no appointments are found
+        setAppointments([]);
+        setRows([]);
+      }
     } catch (error) {
       console.error("Error fetching appointments:", error);
       showErrorSnackbar(
         "Failed to fetch appointments. Please try again."
       );
+      
+      // Ensure states are empty when there's an error
+      setAppointments([]);
+      setRows([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getExpiredTokens = async () => {
-    if (!cabinId || !selectedSlot) return;
-
-    const expiredTokens = await fetchExpiredTokens(cabinId, selectedSlot);
-    console.log(`Fetched ${expiredTokens.length} expired tokens`);
-    setExpiredTokens(expiredTokens);
-  };
-
   useEffect(() => {
     if (cabinId && selectedSlot && !loading) {
       getAppointments();
-      getExpiredTokens();
     }
   }, [cabinId, selectedSlot]);
 
@@ -344,41 +342,57 @@ export default function AppointmentTable() {
         if (appointmentData) {
           console.log("Processing appointment update:", appointmentData);
           
-          // Update rows state
-          setRows((prevRows) => {
-            // Handle null patient data safely
-            const patientData = appointmentData.patient || {};
-            
-            // Check if name exists before splitting
-            const name = appointmentData.patient_name || appointmentData.name || '';
-            const nameParts = name.split(' ');
-            
-            // Parse token as integer for consistent handling
-            const tokenNumber = parseInt(appointmentData.token, 10) || 0;
-            
-            const formattedAppointment = {
-              // Use appointment_id if available, otherwise use token with stable prefix
-              id: appointmentData.appointment_id || `token-${tokenNumber}`,
-              token: tokenNumber,
-              appointment_id: appointmentData.appointment_id,
-              firstName: nameParts[0] || "",
-              lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
-              checkin: appointmentData.checkin || false,
-              paid: appointmentData.paid || false,
-              status: appointmentData.status || "pending",
-              disease: appointmentData.disease || "",
-              age: patientData.age || "",
-              phone_number: patientData.phone_number || "",
-              location: patientData.location || "",
-              sex: patientData.gender || "",
-              guardian: patientData.guardian || "",
-              appointment_type: appointmentData.appointment_type || "New",
-              mode: appointmentData.mode || "",
-              fees_paid: appointmentData.fees_paid || 0,
-            };
+          // Parse token as integer for consistent handling
+          const tokenNumber = parseInt(appointmentData.token, 10) || 0;
+          const appointmentId = appointmentData.appointment_id;
+          
+          // Create a stable ID for this appointment
+          const stableId = appointmentId || `token-${tokenNumber}`;
+          
+          // Check if we need to remove rows for this appointment before adding updated ones
+          const shouldRefresh = appointmentData.status === 'cancelled' || 
+                               appointmentData.status === 'removed';
+          
+          if (shouldRefresh) {
+            // For removed appointments, trigger a complete refresh
+            getAppointments();
+            return;
+          }
+          
+          // Generate formatted appointment data
+          // Handle null patient data safely
+          const patientData = appointmentData.patient || {};
+          
+          // Check if name exists before splitting
+          const name = appointmentData.patient_name || appointmentData.name || '';
+          const nameParts = name.split(' ');
+          
+          const formattedAppointment = {
+            id: stableId,
+            token: tokenNumber,
+            appointment_id: appointmentId,
+            firstName: nameParts[0] || "",
+            lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
+            checkin: appointmentData.checkin || false,
+            paid: appointmentData.paid || false,
+            status: appointmentData.status || "pending",
+            disease: appointmentData.disease || "",
+            age: patientData.age || "",
+            phone_number: patientData.phone_number || "",
+            location: patientData.location || "",
+            sex: patientData.gender || "",
+            guardian: patientData.guardian || "",
+            appointment_type: appointmentData.appointment_type || "New",
+            mode: appointmentData.mode || "",
+            fees_paid: appointmentData.fees_paid || 0,
+          };
 
+          // Update rows state
+          setRows(prevRows => {
+            // Try to find existing row by both appointment_id and stable id
             const existingIndex = prevRows.findIndex(
-              (r) => r.appointment_id === appointmentData.appointment_id
+              (r) => (r.appointment_id && r.appointment_id === appointmentId) || 
+                     r.id === stableId
             );
 
             if (existingIndex !== -1) {
@@ -395,19 +409,21 @@ export default function AppointmentTable() {
           // Also update the appointments state
           setAppointments(prevAppointments => {
             const existingIndex = prevAppointments.findIndex(
-              a => a.appointment_id === appointmentData.appointment_id
+              a => (a.appointment_id && a.appointment_id === appointmentId) ||
+                  a.id === stableId
             );
             
             if (existingIndex !== -1) {
               const newAppointments = [...prevAppointments];
               newAppointments[existingIndex] = {
                 ...newAppointments[existingIndex],
-                ...appointmentData
+                ...appointmentData,
+                id: stableId
               };
               return newAppointments;
             }
             
-            return [...prevAppointments, appointmentData];
+            return [...prevAppointments, {...appointmentData, id: stableId}];
           });
         }
       } catch (error) {
@@ -422,55 +438,50 @@ export default function AppointmentTable() {
 
   useEffect(() => {
     if (appointments && appointments.length > 0) {
-      const mappedRows = appointments.map(appointment => {
-        const patientName = appointment.patient_name || appointment.name || '';
-        const nameParts = patientName.split(' ');
-        
-        // Parse token as an integer, defaulting to 0 if invalid
-        const tokenNumber = parseInt(appointment.token, 10) || 0;
-        
-        return {
-          id: appointment.appointment_id || tokenNumber.toString(),
-          token: tokenNumber,
-          appointment_id: appointment.appointment_id,
-          firstName: nameParts[0] || "",
-          lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
-          checkin: appointment.checkin || false,
-          paid: appointment.paid || false,
-          mode: appointment.payment_mode || appointment.mode || '-',
-          fees_paid: appointment.fees_paid || 0,
-          status: appointment.status || "pending",
-          disease: appointment.disease || "",
-          age: appointment.age || (appointment.patient?.age) || "",
-          phone_number: appointment.phone_number || (appointment.patient?.phone_number) || "",
-          location: appointment.location || (appointment.patient?.location) || "",
-          sex: appointment.sex || (appointment.patient?.gender) || "",
-          guardian: appointment.guardian_name || (appointment.patient?.guardian) || "",
-          appointment_type: appointment.appointment_type,
-          isPlaceholder: false,
-        };
-      });
+      // Clear rows state first to ensure clean slate
+      setRows([]);
       
-      console.log("Mapped rows:", mappedRows);
-      setRows(mappedRows);
-      setTotalPatients(mappedRows.length);
+      // Create a new reference for the rows array
+      const mappedRows = [];
+      
+      // Then update with new data
+        appointments.forEach(appointment => {
+          const patientName = appointment.patient_name || appointment.name || '';
+          const nameParts = patientName.split(' ');
+          
+          // Parse token as an integer, defaulting to 0 if invalid
+          const tokenNumber = parseInt(appointment.token, 10) || 0;
+      
+          mappedRows.push({
+            id: `${cabinId}-${appointment.appointment_id}` || `token-${tokenNumber}`,
+            token: tokenNumber,
+            appointment_id: appointment.appointment_id,
+            firstName: nameParts[0] || "",
+            lastName: nameParts.length > 1 ? nameParts.slice(1).join(' ') : "",
+            checkin: appointment.checkin || false,
+            paid: appointment.paid || false,
+            mode: appointment.payment_mode || appointment.mode || '-',
+            fees_paid: appointment.fees_paid || 0,
+            status: appointment.status || "pending",
+            disease: appointment.disease || "",
+            age: appointment.age || (appointment.patient?.age) || "",
+            phone_number: appointment.phone_number || (appointment.patient?.phone_number) || "",
+            location: appointment.location || (appointment.patient?.location) || "",
+            sex: appointment.sex || (appointment.patient?.gender) || "",
+            guardian: appointment.guardian_name || (appointment.patient?.guardian) || "",
+            appointment_type: appointment.appointment_type,
+            isPlaceholder: false,
+          });
+        });
+        
+        console.log("Mapped rows:", mappedRows);
+        setRows(mappedRows);
+        setTotalPatients(mappedRows.length);
     } else {
       setRows([]);
       setTotalPatients(0);
     }
   }, [appointments]);
-
-  const handleOpen = () => {
-    const maxToken = appointments.length > 0 ? Math.max(...appointments.map((r) => r.token)) : 0;
-    const nextToken = maxToken + 1;
-    
-    setNewAppointment(prev => ({
-      ...prev,
-      token: nextToken.toString()
-    }));
-    
-    setOpen(true);
-  };
 
   const handleClose = () => {
     resetForm();
@@ -1592,110 +1603,8 @@ export default function AppointmentTable() {
     }
   };
 
-  const handleEndSlotOpen = () => {
-    setEndSlotModalOpen(true);
-  };
-
-  const handleEndSlotClose = () => {
-    setEndSlotModalOpen(false);
-    setNewSlotData({ datetime: '' });
-  };
-
-  const handleNewSlotChange = (e) => {
-    setNewSlotData({
-      datetime: e.target.value
-    });
-  };
-
-  const handleEndSlotSubmit = async () => {
-    try {
-      setIsCreatingSlot(true);
-      
-      const datetime = new Date(newSlotData.datetime);
-      const date = datetime.toISOString().split('T')[0];
-      const time = datetime.toTimeString().split(' ')[0];
-      
-      const response = await createSlot(cabinId, selectedSlot, {
-        date: date,
-        time: time
-      });
-      
-      const user = JSON.parse(localStorage.getItem("user"));
-      if (user) {
-        if (!user.checkupcabindata?.[0]?.cabin_slots) {
-          user.checkupcabindata[0].cabin_slots = [];
-        }
-        
-        const newSlot = response.slot;
-        if (!user.checkupcabindata?.[0]?.cabin_slots.find(slot => slot.slot === newSlot)) {
-          user.checkupcabindata[0].cabin_slots.push({
-            slot: newSlot,
-            is_active: true
-          });
-        }
-        
-        user.checkupcabindata[0].cabin_slots = user.checkupcabindata[0].cabin_slots.map(slot => ({
-          ...slot,
-          is_active: slot.slot === response.slot
-        }));
-        
-        localStorage.setItem("user", JSON.stringify(user));
-      }
-      
-      showSuccessSnackbar("Slot ended successfully and new slot created");
-      handleEndSlotClose();
-      
-      window.location.reload();
-    } catch (error) {
-      console.error("Error ending slot:", error);
-      showErrorSnackbar("Failed to end slot: " + error.message, "error");
-    } finally {
-      setIsCreatingSlot(false);
-    }
-  };
-
-  const renderEndSlotModal = () => (
-    <Modal
-      open={endSlotModalOpen}
-      onClose={handleEndSlotClose}
-      aria-labelledby="end-slot-modal"
-    >
-      <Box sx={modalStyle}>
-        <Typography variant="h6" component="h2" mb={2}>
-          End Current Slot
-        </Typography>
-        <Typography variant="body2" color="text.secondary" mb={3}>
-          Please select the date and time for the new slot
-        </Typography>
-        <TextField
-          fullWidth
-          type="datetime-local"
-          name="datetime"
-          label="Date and Time"
-          value={newSlotData.datetime}
-          onChange={handleNewSlotChange}
-          InputLabelProps={{ shrink: true }}
-          sx={{ mb: 3 }}
-          inputProps={{
-            min: new Date().toISOString().slice(0, 16)
-          }}
-        />
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 2 }}>
-          <Button onClick={handleEndSlotClose}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleEndSlotSubmit}
-            disabled={!newSlotData.datetime || isCreatingSlot}
-          >
-            {isCreatingSlot ? <CircularProgress size={24} /> : "End Slot"}
-          </Button>
-        </Box>
-      </Box>
-    </Modal>
-  );
-
   // Calculate displayedRows based on rows after rows is defined
-  const displayedRows = React.useMemo(() => generateDisplayRows(rows), [rows]);
+  const displayedRows = React.useMemo(() => generateDisplayRows(rows, cabinId), [rows, cabinId]);
 
   return (
     <div
@@ -1720,14 +1629,6 @@ export default function AppointmentTable() {
           <Typography variant="subtitle1" fontWeight="600">
             Summary
           </Typography>
-        </Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={handleEndSlotOpen}
-          disabled={!selectedSlot}
-        >
-          End Slot
         </Button>
       </Box>
 
@@ -1805,8 +1706,11 @@ export default function AppointmentTable() {
       >
         {renderEditModal()}
 
-        <DataGrid
-          rows={displayedRows}
+
+        {appointments.length === 0  ?
+          <Box sx={{display:'flex', alignItems: 'center', justifyContent : 'center'}}>No Appointments</Box>
+         : appointments.length > 0 ? <DataGrid
+          rows={displayedRows || []}
           columns={columns}
           slots={{ toolbar: CustomToolbar }}
           paginationModel={paginationModel}
@@ -1823,6 +1727,7 @@ export default function AppointmentTable() {
           components={{
             NoRowsOverlay: CustomNoRowsOverlay,
           }}
+          key={`${cabinId}-${selectedSlot}`}
           sx={{
             "& .MuiDataGrid-columnHeaders": {
               backgroundColor: "#f5f5f5",
@@ -1846,21 +1751,13 @@ export default function AppointmentTable() {
             },
           }}
           getRowId={(row) => {
-            // For placeholder rows, use the placeholder ID we assigned
             if (row.isPlaceholder) {
-              return row.id;
+              return `${cabinId}-placeholder-${row.token}`;
             }
-            
-            // For actual appointments, use appointment_id if available
-            if (row.appointment_id) {
-              return row.appointment_id;
-            }
-            
-            // Otherwise use a stable token-based ID
-            const tokenNumber = parseInt(row.token, 10) || 0;
-            return `token-${tokenNumber}`;
+            return row.id;
           }}
-        />
+        /> : <Box sx={{display:'flex', alignItems: 'center', justifyContent : 'center'}}><CircularProgress /></Box>
+        } 
       </div>
 
       <Dialog open={editConfirmationOpen} onClose={handleCancelEdit}>
@@ -2194,8 +2091,6 @@ export default function AppointmentTable() {
       >
         <AddCircleIcon fontSize="large" />
       </IconButton>
-
-      {renderEndSlotModal()}
     </div>
   );
 }
