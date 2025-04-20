@@ -93,6 +93,9 @@ import { PageHeader } from '../components/common/PageHeader';
 import {getAttachments, uploadAttachment, deleteAttachment, getPatientDetails, getPrescriptions, savePrescription, manageVitals, saveTemplate, getVitals, getCurrentPrescription, getPastPrescriptions, getAppointmentDetails, markPatientAsDone} from '../services/api';
 import { printPrescription } from '../utils/prescriptionUtils';
 
+// Add this import at the top of the file
+import { useCheckupCabin } from "../context/CheckupCabinContext";
+
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
 // Utility function to construct full URL for attachments
@@ -164,8 +167,12 @@ const ConsultationPage = () => {
     bloodSugar: ''
   };
 
+  // Add this line to get the getCurrentCabinId function from context
+  const { getCurrentCabinId } = useCheckupCabin();
+
+  // Replace this line later in the component
   const user = JSON.parse(localStorage.getItem("user"));
-  const cabinId = user?.checkupcabindata?.[0]?.id;
+  const cabinId = getCurrentCabinId();
 
   // Get complaints data from location state or use empty array
   const complaintsData = location.state?.complaintsData || [];

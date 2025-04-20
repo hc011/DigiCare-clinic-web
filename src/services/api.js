@@ -554,3 +554,16 @@ export const updateSlot = async(payload) => {
     throw error;
   }
 };
+
+export const getPaymentReceipt = async (appointment_id) => {
+  try {
+    const response = await axiosInstance.get(
+      `/doctorinfo/receipt/${appointment_id}`,
+      { withCredentials: true }
+    );
+    return response.data;
+  } catch(error) {
+    console.error("Error fetching payment receipt:", error);
+    throw error;
+  }
+}

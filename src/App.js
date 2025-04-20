@@ -37,7 +37,6 @@ import { fetchPatients, fetchCurrentPosition } from "./services/api";
 import { ThemeProvider } from "@mui/material/styles";
 import { theme } from "./theme/theme";
 import Dashboard from "./Pages/Dashboard";
-import { getCabinInfo } from "./utils/dateUtils";
 import PatientInfoPage from "./Pages/PatientInfoPage";
 import ConsultationPage from "./Pages/ConsultationPage";
 import PDFViewer from "./components/PDFViewer";
