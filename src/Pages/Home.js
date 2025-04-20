@@ -6,6 +6,7 @@ import { keyframes } from "@emotion/react";
 import StatisticsCard from "./StatisticsCard";
 import DoctorHeader from "./DoctorHeader";
 import { getCabinInfo } from "../utils/dateUtils";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -26,8 +27,8 @@ export default function Home({
   loading,
   queueList
 }) {
-  const user = JSON.parse(localStorage.getItem('user'));
-  const doctor = user.checkupcabindata[0].doctor;
+  const { getCurrentDoctor } = useCheckupCabin();
+  const doctor = getCurrentDoctor();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const currentPatient = patients.find((p) => parseInt(p.position) === parseInt(currentPosition));
 
