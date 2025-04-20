@@ -41,3 +41,25 @@ export const useContextCabinInfo = () => {
   const { isInitialized, cabinId, selectedSlot, cabinSlots } = useCheckupCabin();
   return { cabinId, selectedSlot, cabinSlots, isInitialized };
 };
+
+export const timeConverter24to12 = (time) => {
+  if(!time) return '';
+  const [hours, minutes] = time.split(':');
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const adjustedHours = hours % 12 || 12; // Convert to 12-hour format
+  return `${adjustedHours}:${minutes} ${period}`;
+}
+
+  // Format the slot date and time for display
+  export const formatSlotDateTime = (slotDateTime) => {
+    if (!slotDateTime) return 'No slot selected';
+    const date = new Date(slotDateTime);    
+    const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'long' });
+    const year = date.getFullYear();
+    const time = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    // Format as "day, date month, year time"
+    return `${weekday}, ${day} ${month}, ${year}`;
+  };

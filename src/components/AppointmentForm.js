@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   Box,
@@ -18,9 +18,11 @@ import {
   Button,
 } from "@mui/material";
 import { useAppointmentForm } from '../context/AppointmentFormContext';
-import { addAppointment, getPatientProfile, getMaxTokenNumber } from "../services/api";
+import { addAppointment, getPatientProfile, getMaxTokenNumber, fetchCabinSlots } from "../services/api";
 import { getCabinInfo } from "../utils/dateUtils";
 import { useNotification } from "../context/NotificationContext";
+import { useCheckupCabin } from '../context/CheckupCabinContext';
+import { timeConverter24to12 } from '../utils/dateUtils';
 
 const modalStyle = {
   position: "absolute",
@@ -36,13 +38,14 @@ const modalStyle = {
 };
 
 const AppointmentForm = () => {
-  const { isOpen, closeAppointmentForm, initialData, updateMaxToken, getMaxToken } = useAppointmentForm();
+  const { isOpen, closeAppointmentForm, initialData, updateMaxToken } = useAppointmentForm();
   const [isAdding, setIsAdding] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
   const [error, setError] = useState("");
   const [mobileSearchResults, setMobileSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const { showSuccessSnackbar, showErrorSnackbar, showWarningSnackbar } = useNotification();
+  const { getLatestOpenCabin } = useCheckupCabin();
   // Create a ref for updateMaxToken to avoid dependency cycle
   const updateMaxTokenRef = React.useRef(updateMaxToken);
   
@@ -53,13 +56,116 @@ const AppointmentForm = () => {
     payment: false
   });
 
+  const user = JSON.parse(localStorage.getItem("user"));
+  const { cabinId, selectedSlot } = getCabinInfo(user);
+
+  const [localCabinId, setLocalCabinId] = useState(cabinId || null);
+  const [localSelectedSlot, setLocalSelectedSlot] = useState(selectedSlot || null)
+  const cabins = user?.checkupcabindata || [];
+
+  const [localOpenSlots, setLocalOpenSlots] = useState([]);
+
+  useEffect(() => {
+    if(cabinId !== localCabinId) {
+      setLocalCabinId(cabinId);
+    }
+    if(selectedSlot !== localSelectedSlot) {
+      setLocalSelectedSlot(selectedSlot);
+    }
+  }, [cabinId, selectedSlot]);
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const slots = await fetchCabinSlots(localCabinId);
+        const openSlots = slots.filter(slot => slot.status === "open");
+        const latestOpenSlot = getLatestOpenCabin(openSlots).slot;
+        setLocalSelectedSlot(latestOpenSlot);
+        setLocalOpenSlots(openSlots);
+      } catch (error) {
+        console.error("Error fetching slots:", error);
+      }
+    };
+
+    // Check if cabinId changed
+    if (isOpen && localCabinId) {
+      fetchSlots();
+      console.log(localSelectedSlot)
+    }
+
+  }, [localCabinId, isOpen]);
+
+  useEffect(() => {
+    const fetchMaxToken = async () => {
+      try {
+        const maxToken = await getMaxTokenNumber(localCabinId, localSelectedSlot);
+        updateMaxTokenRef.current(localCabinId, localSelectedSlot, maxToken);
+        
+        const nextToken = maxToken + 1;
+        
+        setNewAppointment(prev => ({
+          ...prev,
+          token: nextToken.toString()
+        }));
+        
+      } catch (error) {
+        console.error("Error getting max token:", error);
+        setError("Failed to initialize form. Please try again.");
+      }
+    };
+
+    
+    // Check if selectedSlot changed
+    if (isOpen && localCabinId && localSelectedSlot) {
+      console.log(localSelectedSlot)
+      fetchMaxToken();
+    }
+
+  }, [localSelectedSlot, isOpen]);  
+
   // Keep the ref current
   React.useEffect(() => {
     updateMaxTokenRef.current = updateMaxToken;
   }, [updateMaxToken]);
 
-  const user = JSON.parse(localStorage.getItem("user"));
-  const { cabinId, selectedSlot } = getCabinInfo(user);
+  // Format the slot date for display using the date field when available
+  const formatSlotDateFromAPI = (slotObj) => {
+    if (!slotObj) return 'No slot selected';
+    
+    // Use date field if available, otherwise fall back to slot timestamp
+    const dateToUse = slotObj.date || slotObj.slot.split('T')[0];
+    
+    try {
+      const date = new Date(dateToUse);
+      const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+      const day = date.getDate();
+      const month = date.toLocaleString('en-US', { month: 'long' });
+      const year = date.getFullYear();
+      
+      return `${weekday}, ${day} ${month}, ${year}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  };
+
+  // Format the slot date and time for display
+  const formatSlotDateTime = (slotDateTime) => {
+    if (!slotDateTime) return 'No slot selected';
+    
+    // Create a new date object from the input
+    const date = new Date(slotDateTime);
+    
+    // Extract date components separately
+    const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'long' });
+    const year = date.getFullYear();
+    const time = date.toLocaleString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    // Format as "day, date month, year time"
+    return `${weekday}, ${day} ${month}, ${year}`;
+  };
 
   const [newAppointment, setNewAppointment] = useState({
     id: "",
@@ -87,13 +193,13 @@ const AppointmentForm = () => {
       setValidationErrors({ mobileNumber: false, payment: false });
       setMobileFieldTouched(false);
       
-      if (!cabinId) {
+      if (!localCabinId) {
         setError("No valid cabin found. Please contact support.");
         setIsInitializing(false);
         return;
       }
       
-      if (!selectedSlot) {
+      if (!localSelectedSlot) {
         setError("No valid appointment slot found. Please contact support.");
         setIsInitializing(false);
         return;
@@ -110,16 +216,16 @@ const AppointmentForm = () => {
           location: initialData.location || "",
           guardian: initialData.guardian || "",
         }));
-      }
+      }  
       
       const fetchMaxToken = async () => {
         try {
           // Always get fresh token from API when form is opened
-          const maxToken = await getMaxTokenNumber(cabinId, selectedSlot);
+          const maxToken = await getMaxTokenNumber(localCabinId, localSelectedSlot);
           console.log("Fetched maximum token from API:", maxToken);
           
           // Update the cached value using ref to avoid dependency cycle
-          updateMaxTokenRef.current(cabinId, selectedSlot, maxToken);
+          updateMaxTokenRef.current(localCabinId, localSelectedSlot, maxToken);
           
           const nextToken = maxToken + 1;
           
@@ -138,7 +244,7 @@ const AppointmentForm = () => {
       
       fetchMaxToken();
     }
-  }, [isOpen, cabinId, selectedSlot, initialData]); // Removed updateMaxToken from dependencies
+  }, [isOpen, localCabinId, localSelectedSlot, initialData]); // Updated dependency array
 
   const resetForm = () => {
     setNewAppointment({
@@ -281,16 +387,14 @@ const AppointmentForm = () => {
   const AddAppointmentApi = async (newEntry) => {
     setIsAdding(true);
     try {
-      const user = JSON.parse(localStorage.getItem("user"));
-      const { cabinId, selectedSlot } = getCabinInfo(user);
-      if (!cabinId || !selectedSlot) {
+      if (!localCabinId || !localSelectedSlot) {
         showErrorSnackbar("Unable to retrieve cabin information");
         return;
       }
 
       await addAppointment({
-        cabinId,
-        slot: selectedSlot,
+        cabinId: localCabinId,
+        slot: localSelectedSlot,
         ...newEntry,
       });
 
@@ -298,9 +402,9 @@ const AppointmentForm = () => {
       
       // After successfully adding an appointment, refresh the max token
       try {
-        const newMaxToken = await getMaxTokenNumber(cabinId, selectedSlot);
+        const newMaxToken = await getMaxTokenNumber(localCabinId, localSelectedSlot);
         // Use ref to avoid dependency cycle
-        updateMaxTokenRef.current(cabinId, selectedSlot, newMaxToken);
+        updateMaxTokenRef.current(localCabinId, localSelectedSlot, newMaxToken);
         console.log("Updated max token after adding appointment:", newMaxToken);
       } catch (tokenError) {
         console.error("Error refreshing max token after adding appointment:", tokenError);
@@ -359,7 +463,7 @@ const AppointmentForm = () => {
       }
     }
     
-    if (!selectedSlot) {
+    if (!localSelectedSlot) {
       setError("No valid appointment slot found. Please contact support.");
       return;
     }
@@ -444,6 +548,36 @@ const AppointmentForm = () => {
                 gridTemplateColumns: "1fr 1fr",
               }}
             >
+              <FormControl fullWidth>
+                <InputLabel>Select Cabin</InputLabel>
+                <Select
+                  name="cabin"
+                  value={localCabinId}
+                  onChange={(e) => setLocalCabinId(Number(e.target.value))}
+                  label="Select Cabin"
+                >
+                  {cabins.map((cabin) => (
+                  <MenuItem key={cabin.id} value = {cabin.id}>{cabin.doctor}</MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth>
+                <InputLabel>Select Slot</InputLabel>
+                <Select
+                  name="slot"
+                  value={localSelectedSlot}
+                  onChange={(e) => {setLocalSelectedSlot(e.target.value)}}
+                  label="Select Slot"
+                >
+                  {localOpenSlots.map((slot) => (
+                    <MenuItem key={slot.slot} value={slot.slot}>
+                      {timeConverter24to12(slot.start_time)} - {timeConverter24to12(slot.end_time)} ({formatSlotDateFromAPI(slot)})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
               <TextField
                 fullWidth
                 label="Token Number"
@@ -828,4 +962,4 @@ const AppointmentForm = () => {
   );
 };
 
-export default AppointmentForm; 
+export default AppointmentForm;

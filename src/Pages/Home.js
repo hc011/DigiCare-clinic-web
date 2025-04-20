@@ -6,6 +6,7 @@ import { keyframes } from "@emotion/react";
 import StatisticsCard from "./StatisticsCard";
 import DoctorHeader from "./DoctorHeader";
 import { getCabinInfo } from "../utils/dateUtils";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
 
@@ -26,6 +27,8 @@ export default function Home({
   loading,
   queueList
 }) {
+  const { getCurrentDoctor } = useCheckupCabin();
+  const doctor = getCurrentDoctor();
   const isMobile = useMediaQuery("(max-width: 768px)");
   const currentPatient = patients.find((p) => parseInt(p.position) === parseInt(currentPosition));
 
@@ -69,7 +72,7 @@ export default function Home({
         <div
           style={{ display: "flex", flexDirection: "column", flexGrow: "3" }}
         >
-          {!isMobile && <DoctorHeader doctorName="Dr. Amit Mittal" />}{" "}
+          {!isMobile && <DoctorHeader doctorName={doctor} />}{" "}
           <QueueContainer
             loading={loading}
             patients={patients}

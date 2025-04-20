@@ -7,15 +7,81 @@ const CABIN_ID_KEY = "cabin_id";
 const SELECTED_SLOT_KEY = "cabin_selected_slot";
 const CABIN_SLOTS_KEY = "cabin_slots";
 const SELECTED_SLOT_INFO_KEY = "cabin_selected_slot_info";
+const SELECTED_CABIN_INDEX_KEY = "selected_cabin_index";
 
 const CheckupCabinContext = createContext();
    
 export const CheckupCabinProvider = ({ children }) => {
-  const user = JSON.parse(localStorage.getItem('user'));
+  // Get fresh user data from localStorage on each render
+  const getUserData = () => JSON.parse(localStorage.getItem('user'));
+  const user = getUserData();
+  
   const [cabinSlots, setCabinSlots] = useState(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [cabinId, setCabinId] = useState(null);
   const [selectedSlot, setSelectedSlot] = useState(null);
+  const [selectedCabinIndex, setSelectedCabinIndex] = useState(() => {
+    const savedIndex = localStorage.getItem(SELECTED_CABIN_INDEX_KEY);
+    return savedIndex !== null ? parseInt(savedIndex, 10) : 0;
+  });
+
+  // Debug log the user data
+  useEffect(() => {
+    console.log('CheckupCabinContext - user data:', user);
+    console.log('CheckupCabinContext - checkupcabindata:', user?.checkupcabindata);
+    console.log('CheckupCabinContext - selected index:', selectedCabinIndex);
+  }, [user, selectedCabinIndex]);
+
+  // Helper function to get current cabin
+  const getCurrentCabin = () => {
+    const user = getUserData();
+    if (!user?.checkupcabindata || user.checkupcabindata.length === 0) {
+      console.log('getCurrentCabin - No cabin data available');
+      return null;
+    }
+    
+    // Safety check for index bounds
+    const safeIndex = selectedCabinIndex < user.checkupcabindata.length ? 
+      selectedCabinIndex : 0;
+    
+    const cabin = user.checkupcabindata[safeIndex];
+    console.log('getCurrentCabin - Selected cabin:', cabin);
+    return cabin;
+  };
+
+  // Helper functions to get specific cabin properties
+  const getCurrentCabinId = () => {
+    const cabin = getCurrentCabin();
+    return cabin?.id || null;
+  };
+
+  const getCurrentDoctor = () => {
+    const cabin = getCurrentCabin();
+    return cabin?.doctor || "Dr.";
+  };
+
+  const getCurrentHospital = () => {
+    const cabin = getCurrentCabin();
+    return cabin?.hospital || "";
+  };
+
+  const getCurrentCabinSlots = () => {
+    const cabin = getCurrentCabin();
+    return cabin?.cabin_slots || [];
+  };
+
+  // Update localStorage when selected cabin changes
+  useEffect(() => {
+    console.log('selectedCabinIndex changed to:', selectedCabinIndex);
+    localStorage.setItem(SELECTED_CABIN_INDEX_KEY, selectedCabinIndex.toString());
+    const currentCabin = getCurrentCabin();
+    if (currentCabin?.id) {
+      console.log('Fetching cabin data for ID:', currentCabin.id);
+      fetchCabinData(currentCabin.id);
+    } else {
+      console.log('No cabin ID found for index:', selectedCabinIndex);
+    }
+  }, [selectedCabinIndex]);
 
   // Clear previous cabin data on initial load
   useEffect(() => {
@@ -27,9 +93,10 @@ export const CheckupCabinProvider = ({ children }) => {
     
     // Initialize if we have a user
     const initCabinData = async () => {
-      if (user?.checkupcabindata?.[0]?.id) {
+      const currentCabin = getCurrentCabin();
+      if (currentCabin?.id) {
         try {
-          await fetchCabinData(user.checkupcabindata[0].id);
+          await fetchCabinData(currentCabin.id);
         } finally {
           // Always mark as initialized, even if there was an error
           setIsInitialized(true);
@@ -44,7 +111,7 @@ export const CheckupCabinProvider = ({ children }) => {
 
   // Update localStorage whenever cabinSlots changes
   useEffect(() => {
-    if (cabinSlots && user?.checkupcabindata?.[0]?.id) {
+    if (cabinSlots && getCurrentCabin()?.id) {
       updateLocalStorage();
     }
   }, [cabinSlots]);
@@ -101,10 +168,10 @@ export const CheckupCabinProvider = ({ children }) => {
 
   // Helper function to update localStorage
   const updateLocalStorage = () => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user?.checkupcabindata?.[0]?.id) return;
+    const currentCabin = getCurrentCabin();
+    if (!currentCabin?.id) return;
     
-    const cabinId = user.checkupcabindata[0].id;
+    const cabinId = currentCabin.id;
     const latestOpenSlot = getLatestOpenCabinSlot();
     const selectedSlot = latestOpenSlot ? latestOpenSlot.slot : null; 
     
@@ -122,12 +189,12 @@ export const CheckupCabinProvider = ({ children }) => {
   }
 
   const getCabinInfo = () => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    if (!user?.checkupcabindata?.[0]?.id) {
+    const currentCabin = getCurrentCabin();
+    if (!currentCabin?.id) {
       return { cabinId: null, selectedSlot: null, cabinSlots: [] };
     }
     
-    const cId = user.checkupcabindata[0].id;
+    const cId = currentCabin.id;
     const latestOpenSlot = getLatestOpenCabinSlot();
     const sSlot = latestOpenSlot ? latestOpenSlot.slot : null; 
     
@@ -145,15 +212,26 @@ export const CheckupCabinProvider = ({ children }) => {
     return { cabinId: cId, selectedSlot: sSlot, cabinSlots };
   }
 
+  // Update value object with all the helper functions
   const value = {
     cabinSlots,
     fetchCabinData,
     getLatestOpenCabinSlot,
+    getLatestOpenCabin,
     getOpenSlots,
     getCabinInfo,
     isInitialized,
     cabinId,
-    selectedSlot
+    selectedSlot,
+    selectedCabinIndex,
+    setSelectedCabinIndex,
+    getCurrentCabin,
+    getUserData,
+    getCurrentCabinId,
+    getCurrentDoctor,
+    getCurrentCabinSlots,
+    getCurrentHospital,
+    setSelectedSlot
   }
   
   return (

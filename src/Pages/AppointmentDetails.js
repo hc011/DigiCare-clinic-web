@@ -62,9 +62,11 @@ import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 import { Layout } from '../components/Layout';
 import { PageHeader } from '../components/common/PageHeader';
 import dayjs from 'dayjs';
-import { getAppointmentDetails, updateAppointmentDetails, removeAppointment, getPatientDetails } from '../services/api';
+import { getAppointmentDetails, updateAppointmentDetails, removeAppointment, getPatientDetails, paymentReceipt } from '../services/api';
 import { printPrescription } from '../utils/prescriptionUtils';
+import { generateAndPrintReceipt } from '../utils/receiptUtils';
 import { useNotification } from "../context/NotificationContext";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
 
 const AppointmentDetails = () => {
   const user = JSON.parse(localStorage.getItem('user'));
@@ -87,6 +89,8 @@ const AppointmentDetails = () => {
   const { showSuccessSnackbar, showErrorSnackbar } = useNotification();
   
   const [loading, setLoading] = useState(true);
+  
+  const { getCurrentDoctor } = useCheckupCabin();
   
   const fetchAppointmentDetails = async (appointmentId) => {
     try {
@@ -156,7 +160,7 @@ const AppointmentDetails = () => {
           date: response.slot ? new Date(response.slot).toLocaleDateString() : 'Not scheduled',
           time: response.slot ? new Date(response.slot).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Not scheduled',
           // Add any other fields that might be needed
-          doctor: user.checkupcabindata[0].doctor, // This may need to be updated based on your actual data
+          doctor: getCurrentDoctor(),
           department: 'General Medicine' // This may need to be updated based on your actual data
         };
         
@@ -341,216 +345,13 @@ const AppointmentDetails = () => {
   };
 
   // Add function to handle printing the payment receipt
-  const handlePrintPaymentReceipt = () => {
-    // Create a new window with the receipt content
-    const printWindow = window.open('', '_blank');
-    
-    // Format the date for the receipt
-    const receiptDate = new Date().toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-    
-    // Generate a receipt number
-    const receiptNumber = `RCP-${appointmentInfo.id.replace('AP', '')}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
-    
-    // Generate the receipt HTML content
-    const receiptContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Payment Receipt - ${patientInfo.name}</title>
-        <style>
-          body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            color: #333;
-          }
-          .receipt {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            border: 1px solid #ddd;
-          }
-          .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #2196f3;
-          }
-          .clinic-name {
-            font-size: 24px;
-            font-weight: bold;
-            color: #2196f3;
-            margin-bottom: 5px;
-          }
-          .clinic-address {
-            font-size: 14px;
-            margin-bottom: 5px;
-          }
-          .receipt-title {
-            font-size: 18px;
-            font-weight: bold;
-            text-align: center;
-            margin: 20px 0;
-            text-transform: uppercase;
-          }
-          .receipt-details {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-          }
-          .patient-details, .payment-details {
-            flex: 1;
-          }
-          .detail-row {
-            margin-bottom: 8px;
-          }
-          .label {
-            font-weight: bold;
-            display: inline-block;
-            width: 150px;
-          }
-          .service-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-          }
-          .service-table th, .service-table td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-          }
-          .service-table th {
-            background-color: #f5f5f5;
-          }
-          .amount-row {
-            text-align: right;
-            margin-top: 20px;
-            font-weight: bold;
-          }
-          .footer {
-            margin-top: 40px;
-            display: flex;
-            justify-content: space-between;
-          }
-          .signature {
-            margin-top: 60px;
-            border-top: 1px solid #ddd;
-            padding-top: 5px;
-            width: 200px;
-            text-align: center;
-          }
-          .paid-stamp {
-            position: relative;
-            text-align: center;
-            margin: 30px auto;
-          }
-          .paid-stamp span {
-            display: inline-block;
-            border: 3px solid #4CAF50;
-            color: #4CAF50;
-            padding: 10px 20px;
-            font-size: 24px;
-            font-weight: bold;
-            transform: rotate(-15deg);
-            border-radius: 5px;
-          }
-          @media print {
-            body {
-              margin: 0;
-              padding: 15px;
-            }
-            .receipt {
-              border: none;
-            }
-            button {
-              display: none;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="receipt">
-          <div class="header">
-            <div class="clinic-name">DigiCare Medical Center</div>
-            <div class="clinic-address">123 Healthcare Avenue, Medical District</div>
-            <div class="clinic-address">Phone: +91 1234567890 | Email: info@digicare.com</div>
-          </div>
-          
-          <div class="receipt-title">Payment Receipt</div>
-          
-          <div class="receipt-details">
-            <div class="patient-details">
-              <div class="detail-row"><span class="label">Receipt No:</span> ${receiptNumber}</div>
-              <div class="detail-row"><span class="label">Date:</span> ${receiptDate}</div>
-              <div class="detail-row"><span class="label">Patient Name:</span> ${patientInfo.name}</div>
-              <div class="detail-row"><span class="label">Patient ID:</span> ${patientInfo.id}</div>
-            </div>
-            <div class="payment-details">
-              <div class="detail-row"><span class="label">Appointment ID:</span> ${appointmentInfo.id}</div>
-              <div class="detail-row"><span class="label">Appointment Date:</span> ${appointmentInfo.date}</div>
-              <div class="detail-row"><span class="label">Payment Method:</span> ${appointmentInfo.mode || 'Cash'}</div>
-              <div class="detail-row"><span class="label">Payment Status:</span> ${appointmentInfo.paid ? 'Paid' : 'Unpaid'}</div>
-            </div>
-          </div>
-          
-          <table class="service-table">
-            <thead>
-              <tr>
-                <th>Description</th>
-                <th>Doctor</th>
-                <th>Department</th>
-                <th>Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>${appointmentInfo.appointment_type || 'Consultation'} - ${appointmentInfo.disease || 'General Checkup'}</td>
-                <td>${user.checkupcabindata[0].doctor}</td>
-                <td>${appointmentInfo.department || 'General Medicine'}</td>
-                <td>₹${appointmentInfo.fees_paid}</td>
-              </tr>
-            </tbody>
-          </table>
-          
-          <div class="amount-row">
-            <div class="detail-row"><span class="label">Subtotal:</span> ₹${appointmentInfo.fees_paid}</div>
-            <div class="detail-row"><span class="label">Tax (0%):</span> ₹0</div>
-            <div class="detail-row"><span class="label">Total Amount:</span> ₹${appointmentInfo.fees_paid}</div>
-          </div>
-          
-          <div class="paid-stamp">
-            <span>PAID</span>
-          </div>
-          
-          <div class="footer">
-            <div class="signature">
-              Received By
-            </div>
-            <div class="signature">
-              Authorized Signature
-            </div>
-          </div>
-          
-          <div style="text-align: center; margin-top: 30px; font-size: 12px; color: #777;">
-            This is a computer-generated receipt and does not require a physical signature.
-          </div>
-        </div>
-      </body>
-      </html>
-    `;
-    
-    // Write the content to the new window
-    printWindow.document.open();
-    printWindow.document.write(receiptContent);
-    printWindow.document.close();
-    
-    // Wait for the content to load and then print
-    printWindow.onload = function() {
-      printWindow.print();
-    };
+  const handlePrintPaymentReceipt = async() => {
+    try {
+      await generateAndPrintReceipt(appointmentInfo.id);
+    } catch (error) {
+      console.error('Error printing receipt:', error);
+      showErrorSnackbar('Failed to generate payment receipt');
+    }
   };
 
   // Add function to handle opening the edit modal
@@ -677,7 +478,7 @@ const AppointmentDetails = () => {
         {/* Action Buttons moved to the top */}
         <Box sx={{ display: 'flex', gap: 2, ml: 'auto', mt: { xs: 2, md: 0 } }}>
           
-          {!isFromPastAppointments && (
+          {/* {!isFromPastAppointments && (
             <Button
               variant="outlined"
               startIcon={<Edit />}
@@ -685,7 +486,7 @@ const AppointmentDetails = () => {
             >
               Edit Appointment
             </Button>
-          )}
+          )} */}
           
           {!isFromPastAppointments && appointmentInfo.status !== 'cancelled' && 
            appointmentInfo.status !== 'completed' && (

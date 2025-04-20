@@ -74,7 +74,9 @@ const Login = () => {
         localStorage.setItem("user", JSON.stringify(response));
         
         setUser(response);
-        fetchCabinData(response.checkupcabindata[0].id);
+        if (response.checkupcabindata && response.checkupcabindata.length > 0) {
+          fetchCabinData(response.checkupcabindata[0].id);
+        }
         const isMobileDevice = window.innerWidth <= 768;
         navigate(isMobileDevice ? "/mobile-queue" : "/");
       } else {

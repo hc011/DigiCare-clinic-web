@@ -81,6 +81,7 @@ const GlobalSnackbar = () => {
         }}
         elevation={6}
         variant="filled"
+        closeText="Close"
       >
         <span
           style={{ fontSize: "0.95rem", display: "flex", alignItems: "center" }}

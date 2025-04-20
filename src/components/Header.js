@@ -3,6 +3,10 @@ import { logout } from "../services/authService";
 import { AuthContext } from "../context/AuthContext";
 import { useAppointmentForm } from "../context/AppointmentFormContext";
 import { useNavigate } from "react-router-dom";
+import CabinSelector from "./CabinSelector";
+import SlotSelector from "./SlotSelector";
+import { useCheckupCabin } from "../context/CheckupCabinContext";
+import { timeConverter24to12, formatSlotDateTime } from "../utils/dateUtils";
 import {
   Button,
   Dialog,
@@ -19,12 +23,14 @@ import {
   ListItem,
   ListItemText,
   Typography,
+  Popover,
 } from "@mui/material";
 import logo from "../assets/DigiCare__logo.png";
 import LogoutIcon from "@mui/icons-material/Logout";
 import SearchIcon from "@mui/icons-material/Search";
 import AddCircleIcon from "@mui/icons-material/AddCircle";
 import CloseIcon from "@mui/icons-material/Close";
+import MeetingRoomIcon from "@mui/icons-material/MeetingRoom";
 import "./Header.module.css";
 import { getPatientProfile, getPatientDetails } from "../services/api";
 
@@ -40,6 +46,42 @@ function Header() {
   const [patients, setPatients] = useState([]);
   const [showPatientList, setShowPatientList] = useState(false);
   const searchContainerRef = useRef(null);
+  const [showMobileCabinSelector, setShowMobileCabinSelector] = useState(true);
+  const [mobileSelectorModalOpen, setMobileSelectorModalOpen] = useState(false);
+  
+  // Get cabin and slot information
+  const { selectedCabinIndex, selectedSlot, getUserData, cabinSlots } = useCheckupCabin();
+  const [currentDoctor, setCurrentDoctor] = useState('');
+  const [currentSlotInfo, setCurrentSlotInfo] = useState(null);
+  
+  // Update current doctor and slot information
+  useEffect(() => {
+    const user = getUserData();
+    if (user?.checkupcabindata && user.checkupcabindata.length > 0 && selectedCabinIndex !== undefined) {
+      const cabin = user.checkupcabindata[selectedCabinIndex];
+      setCurrentDoctor(cabin?.doctor || 'Doctor');
+    }
+    
+    // First try to get the active slot from the cabinSlots array
+    if (cabinSlots && selectedSlot) {
+      const activeSlot = cabinSlots.find(slot => slot.slot === selectedSlot);
+      if (activeSlot) {
+        setCurrentSlotInfo(activeSlot);
+        return;
+      }
+    }
+    
+    // Fallback to localStorage if not found in cabinSlots
+    const slotInfoStr = localStorage.getItem('cabin_selected_slot_info');
+    if (slotInfoStr) {
+      try {
+        const slotInfo = JSON.parse(slotInfoStr);
+        setCurrentSlotInfo(slotInfo);
+      } catch (e) {
+        console.error('Error parsing slot info:', e);
+      }
+    }
+  }, [selectedCabinIndex, selectedSlot, getUserData, cabinSlots]);
 
   const handleClickOpen = () => {
     setOpen(true);
@@ -53,6 +95,11 @@ function Header() {
     setUser(null);
     logout();
     handleClose();
+  };
+
+  // Toggle cabin selector visibility in mobile view
+  const toggleMobileCabinSelector = () => {
+    setShowMobileCabinSelector(!showMobileCabinSelector);
   };
 
   const handlePatientSelect = async (patient) => {
@@ -176,26 +223,47 @@ function Header() {
   };
 
   return (
-    <header>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+    <header style={{ 
+      position: 'relative',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: isMobile ? '6px 16px' : '12px 24px',
+      flexWrap: 'wrap',
+      zIndex: 1200,
+      backgroundColor: 'white',
+      position: 'sticky',
+      top: 0,
+      borderBottom: '1px solid #e0e0e0',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+    }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        gap: 2,
+        flex: { xs: 0, md: '0 0 auto' },
+        position: 'relative',
+        zIndex: 5
+      }}>
         <img
           src={logo}
           alt="DigiCare"
-          style={{ width: "150px", height: "40px" }}
+          style={{ width: isMobile ? "110px" : "150px", height: "auto" }}
         />
       </Box>
-
+      
+      
       {/* Patient Search Bar - Center with New Appointment Button */}
       <Box 
         ref={searchContainerRef}
         sx={{ 
           flex: { xs: 0, md: 1 }, 
-          maxWidth: { xs: '40px', md: '550px' }, 
+          maxWidth: { xs: '40px', md: '800px' }, 
           mx: 'auto',
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          gap: 2
+          gap: 1
         }}
       >
         <Button 
@@ -336,24 +404,186 @@ function Header() {
         )}
       </Box>
 
-      {/* Mobile Logout Button */}
-      {isMobile && (
-        <IconButton
-          color="primary"
-          onClick={handleClickOpen}
-          sx={{ marginLeft: "auto" }}
-        >
-          <LogoutIcon />
-        </IconButton>
-      )}
-
-      {/* Desktop Logout Button */}
+      {/* Desktop Selectors - Right side */}
       {!isMobile && (
-        <div className="logout-button">
-          <Button variant="contained" color="primary" onClick={handleClickOpen}>
+        <Box sx={{
+          display: 'flex', 
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 2,
+          ml: 2
+        }}>
+          {/* Cabin Selector - Desktop */}
+          <Box sx={{ 
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            minWidth: 'auto',
+          }}>
+            <CabinSelector />
+          </Box>
+          
+          {/* Slot Selector - Desktop */}
+          <Box sx={{ 
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            minWidth: 'auto'
+          }}>
+            <SlotSelector />
+          </Box>
+          
+          {/* Desktop Logout Button */}
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={handleClickOpen}
+            startIcon={<LogoutIcon />}
+            sx={{
+              borderRadius: '4px',
+              textTransform: 'none',
+              fontWeight: 500,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+              '&:hover': {
+                boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
+              }
+            }}
+          >
             Logout
           </Button>
-        </div>
+        </Box>
+      )}
+
+      <Dialog
+        open={mobileSelectorModalOpen}
+        onClose={() => setMobileSelectorModalOpen(false)}
+        fullWidth
+        maxWidth="sm"
+        sx={{ 
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDialog-paper': {
+            margin: 0,
+            borderRadius: '16px 16px 0 0',
+            position: 'absolute',
+            bottom: 0,
+            width: '100%',
+            maxHeight: '60vh',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          py: 2, 
+          px: 3,
+          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between'
+        }}>
+          <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+            Select Cabin & Slot
+          </Typography>
+          <IconButton
+            edge="end"
+            color="inherit"
+            onClick={() => setMobileSelectorModalOpen(false)}
+            aria-label="close"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500, mb: 2 }}>
+            Cabin
+          </Typography>
+          <CabinSelector />
+          
+          <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 500, mt: 4, mb: 2 }}>
+            Time Slot
+          </Typography>
+          <SlotSelector />
+        </DialogContent>
+      </Dialog>
+
+        
+
+      {/* Mobile buttons container */}
+      {isMobile && (
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          marginLeft: 'auto',
+          gap: 0.5
+        }}>
+          {/* Current selection info - mobile only - now clickable */}
+          <Box 
+            onClick={() => setMobileSelectorModalOpen(true)}
+            sx={{ 
+              display: { xs: 'flex', md: 'none' },
+              flexDirection: 'column',
+              alignItems: 'flex-end',
+              mr: 0.5,
+              maxWidth: '120px',
+              overflow: 'hidden',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(25, 118, 210, 0.04)',
+              border: '1px solid rgba(25, 118, 210, 0.1)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              '&:hover': {
+                backgroundColor: 'rgba(25, 118, 210, 0.08)',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              },
+              '&:active': {
+                backgroundColor: 'rgba(25, 118, 210, 0.12)',
+                transform: 'scale(0.98)'
+              }
+            }}
+          >
+            <Typography 
+              variant="caption" 
+              sx={{ 
+                fontWeight: 600, 
+                lineHeight: 1.1, 
+                color: 'primary.main',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                width: '100%',
+                textAlign: 'right',
+                fontSize: '0.7rem'
+              }}
+            >
+              {currentDoctor}
+            </Typography>
+            {currentSlotInfo && (
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  fontSize: '0.6rem', 
+                  lineHeight: 1.1, 
+                  color: 'text.secondary',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  width: '100%',
+                  textAlign: 'right'
+                }}
+              >
+                {timeConverter24to12(currentSlotInfo.start_time)} - {timeConverter24to12(currentSlotInfo.end_time)}
+              </Typography>
+            )}
+          </Box>
+          
+          {/* Mobile Logout Button */}
+          <IconButton
+            color="primary"
+            onClick={handleClickOpen}
+            sx={{ padding: '6px' }}
+          >
+            <LogoutIcon fontSize="small" />
+          </IconButton>
+        </Box>
       )}
 
       {/* Logout Confirmation Dialog */}

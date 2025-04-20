@@ -41,9 +41,13 @@ export default function Sidebar() {
         width: drawerWidth,
         flexShrink: 0,
         "& .MuiDrawer-paper": {
-          marginTop: "72px",
           width: drawerWidth,
           boxSizing: "border-box",
+          position: "fixed",
+          top: 0,
+          paddingTop: "100px",
+          height: "100%",
+          zIndex: 100,
         },
       }}
     >

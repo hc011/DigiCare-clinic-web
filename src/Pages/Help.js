@@ -237,15 +237,15 @@ const Help = () => {
             For additional assistance, please contact our support team at{" "}
             <Link href="mailto:digicare.india2024@gmail.com">digicare.india2024@gmail.com</Link>
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" color="text.secondary" gutterBottom>
             When reporting an issue, please include:
-            <ul>
-              <li>Your username</li>
-              <li>A detailed description of the problem</li>
-              <li>Steps to reproduce the issue</li>
-              <li>Any error messages you received</li>
-            </ul>
           </Typography>
+          <ul>
+            <li>Your username</li>
+            <li>A detailed description of the problem</li>
+            <li>Steps to reproduce the issue</li>
+            <li>Any error messages you received</li>
+          </ul>
         </Box>
       </Box>
     </Layout>

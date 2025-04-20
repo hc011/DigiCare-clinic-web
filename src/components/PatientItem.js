@@ -35,7 +35,7 @@ import {
   PersonPin,
 } from "@mui/icons-material";
 import DragHandleIcon from "@mui/icons-material/DragHandle";
-
+import { useNotification } from "../context/NotificationContext";
 // Add custom styles for clickable elements
 const clickableStyle = {
   cursor: "pointer",
@@ -62,10 +62,6 @@ const PatientItem = ({
   const [loadingType, setLoadingType] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
-  // Remove debugger statement and add more useful debugging
-
-  // Determine if this is the current patient based on position
-  // Force evaluate as numbers to ensure proper comparison
   let isCurrent = parseInt(position) === parseInt(currentPosition);
   const isLate = late;
   const isDone = status === "done_checkup" || status === "done";
@@ -73,6 +69,32 @@ const PatientItem = ({
   const isPending = status === "pending";
   console.log("late", late);
   const user = JSON.parse(localStorage.getItem("user"));
+
+  const [isSlotActive, setIsSlotActive] = useState(false);
+  const { showWarningSnackbar } = useNotification();
+  useEffect(() => {
+    // Check localStorage for slot active status
+    const checkSlotActive = () => {
+      try {
+        const slotInfoString = localStorage.getItem('cabin_selected_slot_info');
+        if (slotInfoString) {
+          const slotInfo = JSON.parse(slotInfoString);
+          setIsSlotActive(slotInfo.is_active || false);
+        }
+      } catch (error) {
+        console.error("Error parsing slot info from localStorage:", error);
+        setIsSlotActive(false);
+      }
+    };
+    
+    checkSlotActive();
+    
+    window.addEventListener('storage', checkSlotActive);
+    
+    return () => {
+      window.removeEventListener('storage', checkSlotActive);
+    };
+  }, []);
 
   // Handle mobile/desktop responsive state
   useEffect(() => {
@@ -237,6 +259,30 @@ const PatientItem = ({
     }
   };
 
+  const handleDoneButtonClick = (e) => {
+    e.stopPropagation();
+    
+    if (!isSlotActive) {
+      // Show warning if slot is not active
+      showWarningSnackbar('Please make the slot active in the Manage Slots page to enable this feature', 3000);
+    } else {
+      // Proceed with normal functionality
+      setConfirmAction("next");
+    }
+  };
+
+  const handleLateButtonClick = (e) => {
+    e.stopPropagation();
+    
+    if (!isSlotActive) {
+      // Show warning if slot is not active
+      showWarningSnackbar('Please make the slot active in the Manage Slots page to enable this feature', 3000);
+    } else {
+      // Proceed with normal functionality
+      setConfirmAction("late");
+    }
+  };
+
   return (
     <>
       <div
@@ -385,10 +431,7 @@ const PatientItem = ({
                       color="primary"
                       size="small"
                       startIcon={<DoneAll />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmAction("next");
-                      }}
+                      onClick={handleDoneButtonClick}
                       disabled={loadingType === "next" || isDone}
                       sx={{ mr: 1 }}
                     >
@@ -409,10 +452,7 @@ const PatientItem = ({
                       color="secondary"
                       size="small"
                       startIcon={<Schedule />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmAction("late");
-                      }}
+                      onClick={handleLateButtonClick}
                       sx={{ backgroundColor: "white" }}
                     >
                       {loadingType === "late" ? (
@@ -567,10 +607,7 @@ const PatientItem = ({
                       color="primary"
                       size="small"
                       startIcon={<DoneAll />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmAction("next");
-                      }}
+                      onClick={handleDoneButtonClick}
                       disabled={loadingType === "next" || isDone}
                       sx={{ mr: 1 }}
                     >
@@ -591,10 +628,7 @@ const PatientItem = ({
                       color="secondary"
                       size="small"
                       startIcon={<Schedule />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setConfirmAction("late");
-                      }}
+                      onClick={handleLateButtonClick}
                       sx={{ backgroundColor: "white" }}
                     >
                       {loadingType === "late" ? (
