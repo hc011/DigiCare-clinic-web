@@ -130,6 +130,7 @@ export default function MobileAppointmentTable() {
   const [selectedAppointment, setSelectedAppointment] = useState(null);
   const [originalAppointment, setOriginalAppointment] = useState(null);
   const [originalCheckinState, setOriginalCheckinState] = useState(false);
+  const [originalPaidState, setOriginalPaidState] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateError, setUpdateError] = useState(null);
   
@@ -230,6 +231,8 @@ export default function MobileAppointmentTable() {
     
     // Store the original checkin state to determine if it was changed during this edit session
     setOriginalCheckinState(row.checkin);
+    // Store the original paid state
+    setOriginalPaidState(row.paid);
     setSelectedAppointment(formattedRow);
     setOriginalAppointment(formattedRow); // Store original appointment data
     setEditModalOpen(true);
@@ -242,6 +245,7 @@ export default function MobileAppointmentTable() {
     setOriginalAppointment(null);
     setUpdateError(null);
     setOriginalCheckinState(false);
+    setOriginalPaidState(false);
     setValidationErrors({ 
       payment: false, 
       mobileNumber: false,
@@ -1032,7 +1036,7 @@ export default function MobileAppointmentTable() {
                     }}
                     size="small"
                     name="payment-checkbox-mobile"
-                    disabled={selectedAppointment?.status === "cancelled"}
+                    disabled={selectedAppointment?.status === "cancelled" || originalPaidState}
                   />
                 }
                 label={
@@ -1042,6 +1046,7 @@ export default function MobileAppointmentTable() {
                       fontWeight: selectedAppointment.paid ? 'bold' : 'normal',
                       color: validationErrors.payment ? 'error.main' : 
                         selectedAppointment?.status === "cancelled" ? 'text.secondary' :
+                        originalPaidState ? 'text.disabled' :
                         selectedAppointment.paid ? 'primary.main' : 'text.primary',
                       fontSize: '0.85rem'
                     }}
