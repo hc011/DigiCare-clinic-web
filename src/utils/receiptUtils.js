@@ -76,7 +76,7 @@ export const generateAndPrintReceipt = async (appointmentId) => {
           /* Page setup for printing - hide browser headers/footers */
           @page {
             size: auto;
-            margin: 0mm;
+            margin: 5mm 0mm 0mm 0mm;
           }
           
           body {
@@ -250,7 +250,7 @@ export const generateAndPrintReceipt = async (appointmentId) => {
           }
           @media print {
             body {
-              margin: 0;
+              margin: 8px 0 0 0;
               padding: 0;
             }
             .receipt {

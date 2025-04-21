@@ -247,6 +247,7 @@ export default function AppointmentTable() {
   const [editModalOpen, setEditModalOpen] = React.useState(false);
   const [selectedAppointment, setSelectedAppointment] = React.useState(null);
   const [originalCheckinState, setOriginalCheckinState] = React.useState(false);
+  const [originalPaidState, setOriginalPaidState] = React.useState(false);
   const [editMobileSearchResults, setEditMobileSearchResults] = useState([]);
   const [isEditSearching, setIsEditSearching] = useState(false);
   
@@ -691,6 +692,8 @@ export default function AppointmentTable() {
     
     // Store the original checkin state
     setOriginalCheckinState(params.row.checkin);
+    // Store the original paid state
+    setOriginalPaidState(params.row.paid);
     setSelectedAppointment(appointmentData);
     setEditModalOpen(true);
     
@@ -701,6 +704,7 @@ export default function AppointmentTable() {
     setEditModalOpen(false);
     setSelectedAppointment(null);
     setOriginalCheckinState(false);
+    setOriginalPaidState(false);
     setValidationErrors({ payment: false, mobileNumber: false });
     setMobileFieldTouched(false);
   };
@@ -1266,7 +1270,7 @@ export default function AppointmentTable() {
                     }
                   }}
                   name="payment-checkbox"
-                  disabled={selectedAppointment?.status === "cancelled"}
+                  disabled={selectedAppointment?.status === "cancelled" || originalPaidState}
                 />
               }
               label={
