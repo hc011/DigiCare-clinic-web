@@ -13,7 +13,7 @@ export const login = async (username, password) => {
   try {
     // Send a POST request to the login API
     const response = await axios.post(
-      `${API_BASE_URL}/api/login/`,
+      `${API_BASE_URL}/login/`,
       {
         username,
         password,
